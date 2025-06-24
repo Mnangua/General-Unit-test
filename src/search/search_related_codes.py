@@ -422,122 +422,113 @@ class RelatedCodeSearcher:
             print(f"Error in extract_dependent_codes: {e}")
             return ""
     
-    def search_related_codes(self, target_file_path: str, max_depth: int = 3) -> str:
-        """
-        搜索相关代码的主函数
-        
-        Args:
-            target_file_path: 目标文件路径（相对于项目根目录）
-            max_depth: 最大搜索深度，防止无限递归
-            
-        Returns:
-            str: 拼接后的所有相关代码
-        """
-        if not self.llm_client:
-            raise ValueError("LLM client is required for searching related codes")
-        
-        # 记录已处理的文件，避免重复处理
-        processed_files: Set[str] = set()
-        # 存储所有找到的相关代码
-        all_related_codes: Dict[str, str] = {}
-        # 存储文件间的依赖关系
-        dependency_graph: Dict[str, List[str]] = {}
-        
-        # 待处理的文件队列
-        files_to_process = [target_file_path]
-        current_depth = 0
-        
-        while files_to_process and current_depth < max_depth:
-            current_files = files_to_process.copy()
-            files_to_process = []
-            
-            for file_path in current_files:
-                if file_path in processed_files:
-                    continue
-                
-                processed_files.add(file_path)
-                
-                # 读取文件内容
-                file_content = self.read_file_content(file_path)
-                if not file_content:
-                    continue
-                
-                print(f"Processing file: {file_path} (depth: {current_depth})")
-                
-                # 如果是第一个文件，直接使用完整内容
-                if file_path == target_file_path:
-                    all_related_codes[file_path] = file_content
-                    current_code_query = file_content
-                else:
-                    # 对于依赖文件，提取相关代码
-                    # 使用主文件的代码作为查询
-                    main_file_code = all_related_codes.get(target_file_path, "")
-                    
-                    related_code = self.extract_dependent_codes(
-                        main_file_code, file_path, file_content
-                    )
-                    
-                    if related_code and related_code.strip():
-                        all_related_codes[file_path] = related_code
-                        current_code_query = related_code
-                    else:
-                        print(f"No relevant code found in {file_path}")
-                        continue
-                
-                # 查找当前文件的依赖文件
-                dependent_files = self.find_dependent_files(file_path, file_content)
-                
-                if dependent_files:
-                    dependency_graph[file_path] = dependent_files
-                    print(f"Found dependencies for {file_path}: {dependent_files}")
-                    
-                    # 将新发现的文件添加到处理队列
-                    for dep_file in dependent_files:
-                        if dep_file not in processed_files and dep_file not in files_to_process:
-                            # 检查文件是否存在
-                            if self._file_exists_in_docker(dep_file):
-                                files_to_process.append(dep_file)
-                            else:
-                                print(f"Warning: Dependency file not found: {dep_file}")
-            
-            current_depth += 1
-        
-        # 如果没有找到任何相关代码，返回空字符串
-        if not all_related_codes:
-            return ""
-        
-        # 根据依赖关系拼接代码
-        return self._assemble_codes_by_dependency(all_related_codes, dependency_graph, target_file_path)
+    def search_related_codes(self, target_file_path: str, max_depth: int = 3) -> str:  
+        """  
+        搜索相关代码的主函数  
     
-    def _assemble_codes_by_dependency(self, all_codes: Dict[str, str], 
-                                    dependency_graph: Dict[str, List[str]], 
-                                    start_file: str) -> str:
-        """根据依赖关系拼接代码"""
-        assembled_code = []
-        visited = set()
-        
-        def add_file_code(file_path: str):
-            if file_path in visited or file_path not in all_codes:
-                return
-            
-            visited.add(file_path)
-            
-            # 先添加依赖文件的代码
-            if file_path in dependency_graph:
-                for dep_file in dependency_graph[file_path]:
-                    add_file_code(dep_file)
-            
-            # 然后添加当前文件的代码
-            code = all_codes[file_path]
-            if code.strip():
-                assembled_code.append(f"# File: {file_path}")
-                assembled_code.append(code)
-                assembled_code.append("")  # 空行分隔
-        
-        # 从目标文件开始递归添加
-        add_file_code(start_file)
-        
-        return "\n".join(assembled_code)
+        Args:  
+            target_file_path: 目标文件路径（相对于项目根目录）  
+            max_depth: 最大搜索深度，防止无限递归  
+    
+        Returns:  
+            str: 拼接后的所有相关代码  
+        """  
+        if not self.llm_client:  
+            raise ValueError("LLM client is required for searching related codes")  
+    
+        # 记录已处理的文件，避免重复处理  
+        processed_files: Set[str] = set()  
+        # 存储所有找到的相关代码  
+        all_related_codes: Dict[str, str] = {}  
+        # 存储文件间的依赖关系  
+        dependency_graph: Dict[str, List[str]] = {}  
+    
+        # 待处理的文件队列，BFS风格，每个元素为 (file_path, 当前深度)  
+        files_to_process = [(target_file_path, 0)]  
+    
+        while files_to_process:  
+            file_path, cur_depth = files_to_process.pop(0)  
+            if file_path in processed_files:  
+                continue  
+            if cur_depth > max_depth:  
+                continue  
+            processed_files.add(file_path)  
+    
+            # 读取文件内容  
+            file_content = self.read_file_content(file_path)  
+            if not file_content:  
+                continue  
+    
+            print(f"Processing file: {file_path} (depth: {cur_depth})")  
+    
+            # 如果是主文件，直接用全部内容  
+            if file_path == target_file_path:  
+                all_related_codes[file_path] = file_content  
+                main_file_code = file_content  
+            else:  
+                main_file_code = all_related_codes.get(target_file_path, "")  
+                related_code = self.extract_dependent_codes(  
+                    main_file_code, file_path, file_content  
+                )  
+                if related_code and related_code.strip():  
+                    all_related_codes[file_path] = related_code  
+                else:  
+                    print(f"No relevant code found in {file_path}")  
+                    continue  
+    
+            # 查找当前文件的依赖文件  
+            dependent_files = self.find_dependent_files(file_path, file_content)  
+            if dependent_files:  
+                dependency_graph[file_path] = dependent_files  
+                print(f"Found dependencies for {file_path}: {dependent_files}")  
+                # 新依赖文件入队，防止重复  
+                for dep_file in dependent_files:  
+                    if dep_file not in processed_files:  
+                        # 检查文件是否存在  
+                        if self._file_exists_in_docker(dep_file):  
+                            files_to_process.append((dep_file, cur_depth + 1))  
+                        else:  
+                            print(f"Warning: Dependency file not found: {dep_file}")  
+    
+        if not all_related_codes:  
+            return ""  
+    
+        # 根据依赖关系拼接代码，加深度限制  
+        return self._assemble_codes_by_dependency(  
+            all_related_codes, dependency_graph, target_file_path, max_depth  
+        )  
+    
+    
+    def _assemble_codes_by_dependency(self, all_codes: Dict[str, str],  
+                                    dependency_graph: Dict[str, List[str]],  
+                                    start_file: str, max_depth: int = 3) -> str:  
+        """  
+        根据依赖关系拼接代码，防止递归爆栈和循环依赖  
+        """  
+        assembled_code = []  
+        visited = set()  
+    
+        def add_file_code(file_path: str, cur_depth: int):  
+            if file_path in visited:  
+                return  
+            if cur_depth > max_depth:  
+                return  
+            if file_path not in all_codes:  
+                return  
+            visited.add(file_path)  
+            # 先添加依赖文件的代码  
+            if file_path in dependency_graph:  
+                for dep_file in dependency_graph[file_path]:  
+                    add_file_code(dep_file, cur_depth + 1)  
+            # 然后加当前文件的代码  
+            code = all_codes[file_path]  
+            if code.strip():  
+                assembled_code.append(f"# File: {file_path}")  
+                assembled_code.append(code)  
+                assembled_code.append("")  
+    
+        add_file_code(start_file, 0)  
+        return "\n".join(assembled_code)  
 
 
 def create_docker_related_code_searcher(project_root: str, language: str = "auto", 

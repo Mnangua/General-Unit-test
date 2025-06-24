@@ -6,9 +6,6 @@ from typing import List, Dict, Tuple, Optional, Set, Union
 from dataclasses import dataclass
 from enum import Enum
 
-# 添加当前目录到路径以便导入
-sys.path.append(os.path.dirname(__file__))
-
 import tree_sitter_python
 from tree_sitter import Language, Parser
 

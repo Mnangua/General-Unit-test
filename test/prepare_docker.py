@@ -41,12 +41,12 @@ def pull_and_run_background(
     if keep_alive_cmd is None:  
         keep_alive_cmd = ["tail", "-f", "/dev/null"]  
   
-    # 1) 拉取镜像（如果本地不存在）  
-    if image_exists(image):  
-        print(f"[INFO] 镜像 {image} 已存在，跳过 pull")  
-    else:  
-        print(f"[INFO] 拉取镜像 {image} …")  
-        subprocess.run(["docker", "pull", image], check=True)  
+    # # 1) 拉取镜像（如果本地不存在）  
+    # if image_exists(image):  
+    #     print(f"[INFO] 镜像 {image} 已存在，跳过 pull")  
+    # else:  
+    #     print(f"[INFO] 拉取镜像 {image} …")  
+    #     subprocess.run(["docker", "pull", image], check=True)  
   
     # 2) 容器是否已在运行？  
     if container_is_running(container_name):  
@@ -78,11 +78,11 @@ def pull_and_run_background(
   
   
 if __name__ == "__main__": 
-    csv_file = "/home/mengnanqi/General-Unit-Test/benchmark/python-generate-test/metadata_related_code.csv" 
+    csv_file = "/home/mengnanqi/General-Unit-Test/exp_data/metadata_fix_part.csv" 
     df = pd.read_csv(csv_file)
     for index, row in df.iterrows():
         image = row['image_tag']
-        image = "codeexecservice.azurecr.io/" + image
+        #image = "codeexecservice.azurecr.io/" + image
         container_name = row['instance_id']
         print(f"Processing {container_name} with image {image} ...")
         pull_and_run_background(image, container_name)  

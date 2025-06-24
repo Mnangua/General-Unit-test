@@ -32,6 +32,7 @@ class CoverageReport:
     language: str
     uncovered_lines: List[Any]
     coverage_percentage: float
+    tests_output: str = ""  # 测试输出结果，可能包含测试失败信息等
     
 
 class CoverageAnalyzer:
@@ -101,7 +102,7 @@ class PythonCoverageAnalyzer(CoverageAnalyzer):
             return self._create_empty_report()
     
     def _create_empty_report(self) -> CoverageReport:
-        return CoverageReport("python", [], 0.0)
+        return CoverageReport("python", [], 0.0, "")
     
     def _parse_coverage_report(self) -> CoverageReport:
         if self.docker_runner:
@@ -136,13 +137,15 @@ class PythonCoverageAnalyzer(CoverageAnalyzer):
                 with open(coverage_json_path, 'r', encoding='utf-8') as f:
                     coverage_data = json.load(f)
                     coverage_percentage = coverage_data.get("coverage_LINE", 0.0)
+                    tests_output = coverage_data.get("tests_output", "")
             except Exception as e:
                 print(f"⚠ Failed to load coverage.json: {e}")
         
         return CoverageReport(
             language="python",
             uncovered_lines=uncovered_lines,
-            coverage_percentage=coverage_percentage
+            coverage_percentage=coverage_percentage,
+            tests_output=tests_output if 'tests_output' in locals() else ""
         )
     
     def _copy_coverage_files_from_docker(self):
@@ -479,12 +482,12 @@ print(f"Generated uncovered_code.json with {len(uncovered_data)} files")
 def create_docker_coverage_analyzer(container_name: str = None,  
                                     docker_image: str = None,  
                                     testbed_path: str = "/testbed",  
-                                    language: str = "python",  
+                                    output_dir: str = "./docker_output/related_code_exp",  
                                     **kwargs) -> CoverageAnalyzer:  
     docker_runner = DockerCommandRunner(container_name=container_name,  
                                         docker_image=docker_image,  
                                         testbed_path=testbed_path)  
-    output_dir = Path("./docker_output/related_code_exp").resolve()  
+    output_dir = Path(output_dir).resolve()  
     output_dir.mkdir(exist_ok=True)  
     return PythonCoverageAnalyzer(project_root=str(output_dir),  
                                     docker_runner=docker_runner,  

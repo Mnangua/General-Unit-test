@@ -27,19 +27,21 @@ class GeneratedTest:
 class CoverageBasedTestGenerator:
     """基于覆盖率的测试生成器"""
     
-    def __init__(self, container_name: str, images: str, language: str, llm_client=None, use_related_code_searcher=False):
+    def __init__(self, container_name: str, images: str, language: str, temp_dir: str, llm_client=None, use_related_code_searcher=False):
         self.language = language.lower()
         self.llm_client = llm_client
         self.container = container_name
         self.image = images
         self.use_related_code_searcher = use_related_code_searcher
+        self.temp_dir = temp_dir
 
         self.coverage_analyzer = create_docker_coverage_analyzer(
             container_name=self.container,
             docker_image=self.image,
+            output_dir=self.temp_dir,
         )
         
-        if  self.use_related_code_searcher:
+        if self.use_related_code_searcher:
             # 使用Docker环境的相关代码搜索器
             self.code_searcher = create_docker_related_code_searcher(
                 project_root="/testbed",  # Docker容器中的项目根目录

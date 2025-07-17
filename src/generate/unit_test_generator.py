@@ -25,7 +25,7 @@ class GeneratedTest:
 
 
 class CoverageBasedTestGenerator:
-    """基于覆盖率的测试生成器"""
+    """Coverage-based test generator"""
     
     def __init__(self, container_name: str, images: str, language: str, temp_dir: str, llm_client=None, use_related_code_searcher=False):
         self.language = language.lower()
@@ -42,9 +42,9 @@ class CoverageBasedTestGenerator:
         )
         
         if self.use_related_code_searcher:
-            # 使用Docker环境的相关代码搜索器
+            # Use Docker environment related code searcher
             self.code_searcher = create_docker_related_code_searcher(
-                project_root="/testbed",  # Docker容器中的项目根目录
+                project_root="/testbed",  # Project root directory in Docker container
                 language=self.language,
                 llm_client=self.llm_client,
                 container_name=self.container,
@@ -55,10 +55,10 @@ class CoverageBasedTestGenerator:
             self.code_searcher = None
         
     def generate_tests_for_project(self):
-        """为整个项目生成基于覆盖率的测试"""
+        """Generate coverage-based tests for entire project"""
         print(f"Starting coverage-based test generation for {self.language} project...")
         
-        # 1. 收集覆盖率数据
+        # 1. Collect coverage data
         print("Step 1: Collecting coverage data...")
         coverage_report = self.coverage_analyzer.collect_coverage()
         
@@ -66,7 +66,7 @@ class CoverageBasedTestGenerator:
             print("No uncovered lines found.")
             return {}, coverage_report
         
-        # 4. 为每个文件生成测试
+        # 4. Generate tests for each file
         print("Step 3: Generating tests for uncovered code...")
         generated_tests = {}
 
@@ -108,7 +108,7 @@ class CoverageBasedTestGenerator:
             if not test_code:
                 return None
             
-            # 如果没有获得文件路径，生成默认路径
+            # If no file path obtained, generate default path
             if not test_file_path:
                 test_file_path = self._generate_default_test_file_path(file_path)
             
@@ -125,9 +125,9 @@ class CoverageBasedTestGenerator:
     
     def _call_llm_for_test_generation(self, file_path: str, target_content: str, 
                                     uncovered_descriptions: str, related_code: str) -> Tuple[str, str]:
-        """调用LLM生成测试代码，返回(test_code, test_file_path)"""
+        """Call LLM to generate test code, return (test_code, test_file_path)"""
         try:
-            # 选择合适的系统提示词
+            # Select appropriate system prompt
             if self.language == "python":
                 system_prompt = PYTHON_TEST_GENERATION_SYSTEM_PROMPT
             elif self.language == "java":
@@ -135,7 +135,7 @@ class CoverageBasedTestGenerator:
             else:
                 system_prompt = f"Generate comprehensive unit tests for {self.language} code."
             
-            # 构建用户提示词
+            # Build user prompt
             user_prompt = TEST_GENERATION_USER_PROMPT.format(
                 LANGUAGE=self.language,
                 TARGET_FILE_PATH=file_path,
@@ -144,7 +144,7 @@ class CoverageBasedTestGenerator:
                 RELATED_CODE_CONTEXT=related_code
             )
             
-            # 调用LLM
+            # Call LLM
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -175,16 +175,16 @@ class CoverageBasedTestGenerator:
             
         
     def _generate_default_test_file_path(self, source_file: str) -> str:
-        """生成默认的测试文件路径"""
+        """Generate default test file path"""
         file_path = Path(source_file)
         base_name = file_path.stem
         
         if self.language == "python":
             return f"tests/test_{base_name}_extra.py"
         elif self.language == "java":
-            # 将文件名转换为类名格式
+            # Convert filename to class name format
             class_name = ''.join(word.capitalize() for word in base_name.split('_'))
-            # 假设遵循Maven/Gradle项目结构
+            # Assume following Maven/Gradle project structure
             return f"src/test/java/{class_name}ExtraTest.java"
         else:
             return f"tests/test_{base_name}_extra.{file_path.suffix[1:]}"
@@ -193,13 +193,13 @@ class CoverageBasedTestGenerator:
 
         for file_path, code in generated_tests.items():
             try:
-                # 获取Docker运行器
+                # Get Docker runner
                 docker_runner = self.coverage_analyzer.docker_runner
                 if not docker_runner:
                     print(f"✗ Error: No Docker runner available for saving test files")
                     continue
                 
-                # 写入测试文件到容器
+                # Write test file to container
                 success = docker_runner.write_file_to_container(code, file_path)
                 
                 if success:
@@ -229,8 +229,7 @@ class CoverageBasedTestGenerator:
 #     args = parser.parse_args()
 
 #     llm_client = CopilotProxyLLMClient(model=args.model)
-    
-#     # 创建测试生成器
+
 #     generator = CoverageBasedTestGenerator(
 #         container_name=args.container, 
 #         images=args.image, 

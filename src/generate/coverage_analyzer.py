@@ -32,11 +32,11 @@ class CoverageReport:
     language: str
     uncovered_lines: List[Any]
     coverage_percentage: float
-    tests_output: str = ""  # 测试输出结果，可能包含测试失败信息等
+    tests_output: str = ""  # Test output results, may contain test failure information, etc.
     
 
 class CoverageAnalyzer:
-    """覆盖率分析器基类"""
+    """Coverage analyzer base class"""
     
     def __init__(self, project_root: str, language: str, docker_runner: DockerCommandRunner = None):
         self.project_root = Path(project_root).resolve()
@@ -44,19 +44,19 @@ class CoverageAnalyzer:
         self.docker_runner = docker_runner
         
     def collect_coverage(self) -> CoverageReport:
-        """收集覆盖率数据"""
+        """Collect coverage data"""
         raise NotImplementedError
         
     def find_uncovered_code(self) -> List[UncoveredCode]:
-        """查找未覆盖的代码"""
+        """Find uncovered code"""
         raise NotImplementedError
     
     def _run_command(self, command: str, work_dir: str = None) -> Dict[str, str]:
-        """运行命令，支持Docker和本地执行"""
+        """Run command, support Docker and local execution"""
         if self.docker_runner:
             return self.docker_runner.run_command(command, work_dir)
         else:
-            # 本地执行
+            # Local execution
             return run_custom_command(
                 work_dir=work_dir or str(self.project_root),
                 command=command
@@ -64,7 +64,7 @@ class CoverageAnalyzer:
 
 
 class PythonCoverageAnalyzer(CoverageAnalyzer):
-    """Python coverage.py 分析器"""
+    """Python coverage.py analyzer"""
     
     def __init__(self, project_root: str, test_command: str = "python -m pytest", 
                  source_dirs: List[str] = None, docker_runner: DockerCommandRunner = None):
@@ -81,7 +81,7 @@ class PythonCoverageAnalyzer(CoverageAnalyzer):
                 print("⚠️ Failed to activate Conda environment, coverage collection may not work properly.")
                 return self._create_empty_report()
             
-            # 运行测试并收集覆盖率
+            # Run tests and collect coverage
             print("Running tests with coverage...")
             env_cmds = [  
                 'export AGENT_DIR="/agent"',  
@@ -93,7 +93,7 @@ class PythonCoverageAnalyzer(CoverageAnalyzer):
             cmd = " && ".join(env_cmds + ['python3 /eval/all_test_coverage_eval.py'])  
             result = self._run_command(cmd)  
             if result.get("returncode") != 0:  
-                print(f"✗ 外部评估脚本执行失败:\n{result.get('stderr')}") 
+                print(f"✗ External evaluation script execution failed:\n{result.get('stderr')}") 
             
             return self._parse_coverage_report()
             
@@ -112,20 +112,20 @@ class PythonCoverageAnalyzer(CoverageAnalyzer):
         coverage_xml_path = self.project_root / "coverage.xml"
         uncovered_code_json_path = self.project_root / "uncovered_code.json"
                         
-        # 解析XML并生成UncoveredCode对象（保留原有逻辑以防备用）
+        # Parse XML and generate UncoveredCode objects (retain original logic for backup)
         uncovered_code_objects = self._parse_xml_coverage(coverage_xml_path)
         
-        # 尝试从uncovered_code.json加载数据并转换为与该文件相同的格式
+        # Try to load data from uncovered_code.json and convert to same format as this file
         uncovered_lines = []
         if uncovered_code_json_path.exists():
             try:
                 with open(uncovered_code_json_path, 'r', encoding='utf-8') as f:
                     uncovered_data = json.load(f)
-                    uncovered_lines = uncovered_data  # 直接使用json中的格式
+                    uncovered_lines = uncovered_data  # Directly use format from json
                 print(f"✓ Loaded uncovered code data from uncovered_code.json: {len(uncovered_lines)} files")
             except Exception as e:
                 print(f"⚠ Failed to load uncovered_code.json: {e}")
-                # 如果加载失败，回退到UncoveredCode对象
+                # If loading fails, fallback to UncoveredCode objects
                 uncovered_lines = uncovered_code_objects
         else:
             print("⚠ uncovered_code.json not found, using parsed XML data")
@@ -183,33 +183,33 @@ class PythonCoverageAnalyzer(CoverageAnalyzer):
                 print(f"⚠ Failed to copy {container_file} from Docker container")
     
     def _parse_xml_coverage(self, xml_path: Path) -> List[UncoveredCode]:
-        """解析XML覆盖率报告找到未覆盖的代码 - 在Docker内部执行解析"""
+        """Parse XML coverage report to find uncovered code - execute parsing inside Docker"""
         uncovered_code = []
         
         if self.docker_runner:
-            # 在Docker内部执行XML解析
+            # Execute XML parsing inside Docker
             return self._parse_xml_coverage_in_docker()
         else:
-            # 本地解析（保留原始逻辑作为fallback）
+            # Local parsing (retain original logic as fallback)
             return self._parse_xml_coverage_local(xml_path)
     
     def _parse_xml_coverage_in_docker(self) -> List[UncoveredCode]:
-        """在Docker容器内部执行XML覆盖率解析"""
+        """Execute XML coverage parsing inside Docker container"""
         uncovered_code = []
         
         try:
-            # 1. 复制XML解析脚本到Docker容器的/eval目录
+            # 1. Copy XML parsing script to Docker container's /eval directory
             parser_script_path = Path(__file__).parent / "xml_coverage_parser.py"
             if not parser_script_path.exists():
                 print(f"⚠ XML parser script not found: {parser_script_path}")
                 return uncovered_code
             
-            # 读取解析脚本内容
+            # Read parsing script content
             with open(parser_script_path, 'r', encoding='utf-8') as f:
                 script_content = f.read()
             
-            # 将脚本内容写入容器中的临时文件
-            # 使用base64编码来避免特殊字符和heredoc问题
+            # Write script content to temporary file in container
+            # Use base64 encoding to avoid special characters and heredoc issues
             import base64
             script_content_b64 = base64.b64encode(script_content.encode('utf-8')).decode('ascii')
             script_copy_cmd = f"echo '{script_content_b64}' | base64 -d > /eval/xml_coverage_parser.py"
@@ -221,8 +221,8 @@ class PythonCoverageAnalyzer(CoverageAnalyzer):
             
             print("✓ XML parser script copied to Docker container")
             
-            # 2. 在Docker内部执行XML解析
-            xml_file_path = "/testbed/coverage.xml"  # XML文件在容器内的路径
+            # 2. Execute XML parsing inside Docker
+            xml_file_path = "/testbed/coverage.xml"  # XML file path inside container
             parse_cmd = f"cd /eval && python3 xml_coverage_parser.py {xml_file_path} /testbed"
             
             parse_result = self.docker_runner.run_command(parse_cmd)
@@ -230,7 +230,7 @@ class PythonCoverageAnalyzer(CoverageAnalyzer):
                 print(f"⚠ Failed to parse XML coverage in container: {parse_result.get('stderr')}")
                 return uncovered_code
             
-            # 3. 解析返回的JSON结果
+            # 3. Parse returned JSON results
             try:
                 result_json = json.loads(parse_result.get("stdout", "{}"))
                 
@@ -238,7 +238,7 @@ class PythonCoverageAnalyzer(CoverageAnalyzer):
                     print(f"⚠ XML parsing failed: {result_json.get('error', 'Unknown error')}")
                     return uncovered_code
                 
-                # 转换JSON结果为UncoveredCode对象
+                # Convert JSON results to UncoveredCode objects
                 for uncovered_info in result_json.get("uncovered_code", []):
                     coverage_type = CoverageType.BRANCH if uncovered_info.get("coverage_type") == "branch" else CoverageType.LINE
                     
@@ -249,12 +249,12 @@ class PythonCoverageAnalyzer(CoverageAnalyzer):
                         code_snippet=uncovered_info.get("code_snippet", ""),
                         coverage_type=coverage_type,
                         function_name=uncovered_info.get("function_name"),
-                        branch_condition=None  # 可以在后续版本中添加分支条件解析
+                        branch_condition=None  # Can add branch condition parsing in future versions
                     ))
                 
                 print(f"✓ Successfully parsed {len(uncovered_code)} uncovered code segments from Docker")
                 
-                # 4. 生成uncovered_code.json文件
+                # 4. Generate uncovered_code.json file
                 self._generate_and_copy_uncovered_json(uncovered_code)
                 
             except json.JSONDecodeError as e:
@@ -268,20 +268,20 @@ class PythonCoverageAnalyzer(CoverageAnalyzer):
         return uncovered_code
     
     def _generate_and_copy_uncovered_json(self, uncovered_code: List[UncoveredCode]):
-        """生成uncovered_code.json文件并从Docker容器复制到本地"""
+        """Generate uncovered_code.json file and copy from Docker container to local"""
         try:
-            # 1. 按文件路径分组未覆盖的代码
+            # 1. Group uncovered code by file path
             file_uncovered_map = {}
             for uc in uncovered_code:
                 file_path = uc.file_path
                 if file_path not in file_uncovered_map:
                     file_uncovered_map[file_path] = []
                 
-                # 收集该文件的所有未覆盖行号
+                # Collect all uncovered line numbers for this file
                 uncovered_lines = list(range(uc.line_start, uc.line_end + 1))
                 file_uncovered_map[file_path].extend(uncovered_lines)
             
-            # 2. 在Docker容器中生成Python脚本来读取完整文件内容和合并未覆盖行号
+            # 2. Generate Python script in Docker container to read complete file content and merge uncovered line numbers
             script_content = '''
 import json
 import os
@@ -291,16 +291,16 @@ file_uncovered_map = ''' + str(file_uncovered_map) + '''
 uncovered_data = []
 for file_path, uncovered_lines in file_uncovered_map.items():
     try:
-        # 去重并排序未覆盖的行号
+        # Remove duplicates and sort uncovered line numbers
         unique_uncovered_lines = sorted(list(set(uncovered_lines)))
         
-        # 读取完整文件内容
+        # Read complete file content
         full_file_path = os.path.join("/testbed", file_path.lstrip("/"))
         if os.path.exists(full_file_path):
             with open(full_file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 full_code = f.read()
         else:
-            # 如果文件不存在，尝试直接使用原路径
+            # If file doesn't exist, try using original path directly
             if os.path.exists(file_path):
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     full_code = f.read()
@@ -321,25 +321,25 @@ for file_path, uncovered_lines in file_uncovered_map.items():
             "uncovered_lines": sorted(list(set(uncovered_lines)))
         })
 
-# 写入JSON文件
+# Write JSON file
 with open("/testbed/uncovered_code.json", "w", encoding="utf-8") as f:
     json.dump(uncovered_data, f, indent=2, ensure_ascii=False)
 
 print(f"Generated uncovered_code.json with {len(uncovered_data)} files")
 '''
             
-            # 使用base64编码安全传输脚本内容到Docker容器
+            # Use base64 encoding to safely transfer script content to Docker container
             import base64
             script_content_b64 = base64.b64encode(script_content.encode('utf-8')).decode('ascii')
             
-            # 在容器中创建并执行Python脚本
+            # Create and execute Python script in container
             create_script_cmd = f"echo '{script_content_b64}' | base64 -d > /tmp/generate_uncovered.py"
             create_result = self.docker_runner.run_command(create_script_cmd)
             if create_result.get("returncode") != 0:
                 print(f"⚠ Failed to create script in container: {create_result.get('stderr')}")
                 return
             
-            # 执行脚本生成uncovered_code.json
+            # Execute script to generate uncovered_code.json
             exec_script_cmd = "cd /testbed && python3 /tmp/generate_uncovered.py"
             exec_result = self.docker_runner.run_command(exec_script_cmd)
             if exec_result.get("returncode") != 0:
@@ -348,21 +348,21 @@ print(f"Generated uncovered_code.json with {len(uncovered_data)} files")
             
             print("✓ Generated uncovered_code.json in Docker container")
             
-            # 3. 从Docker容器复制文件到本地
+            # 3. Copy file from Docker container to local
             container_path = "/testbed/uncovered_code.json"
             local_path = str(self.project_root / "uncovered_code.json")
             
-            # 检查文件是否存在
+            # Check if file exists
             check_result = self.docker_runner.run_command(f"test -f {container_path} && echo 'EXISTS' || echo 'NOT_FOUND'")
             if "EXISTS" not in check_result.get("stdout", ""):
                 print(f"⚠ {container_path} not found in Docker container")
                 return
             
-            # 复制文件
+            # Copy file
             success = self.docker_runner.copy_file_from_container(container_path, local_path)
             if success:
                 print(f"✓ Copied {container_path} from Docker container")
-                # 验证文件是否成功复制且有内容
+                # Verify file was successfully copied and has content
                 if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
                     print(f"✓ uncovered_code.json successfully copied and has content")
                     print(f"✓ Generated uncovered code data for {len(file_uncovered_map)} files")
@@ -375,7 +375,7 @@ print(f"Generated uncovered_code.json with {len(uncovered_data)} files")
             print(f"⚠ Error generating uncovered_code.json: {e}")
 
     def _parse_xml_coverage_local(self, xml_path: Path) -> List[UncoveredCode]:
-        """本地解析XML覆盖率报告（原始实现，作为fallback）"""
+        """Local parsing of XML coverage report (original implementation, as fallback)"""
         uncovered_code = []
         
         if not xml_path.exists():
@@ -392,7 +392,7 @@ print(f"Generated uncovered_code.json with {len(uncovered_data)} files")
 
                     print(f"Processing file: {filename}")
                     
-                    # 只处理Python文件
+                    # Only process Python files
                     if not filename.endswith('.py'):
                         continue
                     
@@ -400,10 +400,10 @@ print(f"Generated uncovered_code.json with {len(uncovered_data)} files")
                         hits = int(line.get('hits', '0'))
                         line_number = int(line.get('number', '0'))
                         
-                        if hits == 0:  # 未覆盖的行
+                        if hits == 0:  # Uncovered lines
                             code_snippet = self._get_code_snippet_local(filename, line_number)
-                            if code_snippet and code_snippet.strip():  # 忽略空行
-                                # 检查是否是有意义的代码行（不是注释或空行）
+                            if code_snippet and code_snippet.strip():  # Ignore empty lines
+                                # Check if it's meaningful code line (not comment or empty line)
                                 stripped_code = code_snippet.strip()
                                 if (not stripped_code.startswith('#') and 
                                     stripped_code not in ['', 'pass', '...'] and
@@ -424,12 +424,12 @@ print(f"Generated uncovered_code.json with {len(uncovered_data)} files")
         return uncovered_code
     
     def _get_code_snippet_local(self, file_path: str, line_number: int) -> str:
-        """获取指定行的代码片段（本地版本）"""
+        """Get code snippet for specified line (local version)"""
         try:
-            # 在本地环境中，尝试直接访问文件
+            # In local environment, try to access file directly
             full_path = self.project_root / file_path
             if not full_path.exists():
-                # 尝试其他可能的路径
+                # Try other possible paths
                 full_path = Path(file_path)
                 if not full_path.exists():
                     return ""

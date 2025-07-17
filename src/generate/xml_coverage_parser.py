@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-XML Coverage Parser - 在Docker容器内部执行的XML覆盖率解析脚本
+XML Coverage Parser - XML coverage parsing script executed inside Docker container
 """
 
 import os
@@ -12,13 +12,13 @@ from pathlib import Path
 
 
 class CoverageXMLParser:
-    """在Docker容器内部解析XML覆盖率报告"""
+    """Parse XML coverage reports inside Docker container"""
     
     def __init__(self, testbed_path: str = "/testbed"):
         self.testbed_path = testbed_path
     
     def parse_xml_coverage(self, xml_path: str) -> Dict[str, Any]:
-        """解析XML覆盖率报告并返回结构化数据"""
+        """Parse XML coverage report and return structured data"""
         uncovered_code = []
         coverage_summary = {}
         
@@ -33,10 +33,10 @@ class CoverageXMLParser:
             tree = ET.parse(xml_path)
             root = tree.getroot()
             
-            # 解析覆盖率摘要信息
+            # Parse coverage summary information
             coverage_summary = self._extract_coverage_summary(root)
             
-            # 解析未覆盖的代码行
+            # Parse uncovered code lines
             for package in root.findall('.//package'):
                 package_name = package.get('name', '')
                 
@@ -44,17 +44,17 @@ class CoverageXMLParser:
                     filename = class_elem.get('filename', '')
                     class_name = class_elem.get('name', '')
                     
-                    # 只处理Python文件
+                    # Only process Python files
                     if not filename.endswith('.py'):
                         continue
                     
-                    # 处理未覆盖的行
+                    # Process uncovered lines
                     for line in class_elem.findall('lines/line'):
                         hits = int(line.get('hits', '0'))
                         line_number = int(line.get('number', '0'))
                         is_branch = line.get('branch', 'false') == 'true'
                         
-                        if hits == 0:  # 未覆盖的行
+                        if hits == 0:  # Uncovered lines
                             code_snippet = self._get_code_snippet(filename, line_number)
                             if code_snippet and self._is_meaningful_code(code_snippet):
                                 uncovered_info = {
@@ -84,15 +84,15 @@ class CoverageXMLParser:
             }
     
     def _extract_coverage_summary(self, root) -> Dict[str, Any]:
-        """提取覆盖率摘要信息"""
+        """Extract coverage summary information"""
         summary = {}
         
         try:
-            # 尝试从根元素获取总体覆盖率信息
+            # Try to get overall coverage information from root element
             for package in root.findall('.//package'):
                 package_name = package.get('name', 'overall')
                 
-                # 计算行覆盖率
+                # Calculate line coverage
                 lines_covered = 0
                 lines_valid = 0
                 
@@ -117,9 +117,9 @@ class CoverageXMLParser:
         return summary
     
     def _get_code_snippet(self, file_path: str, line_number: int) -> str:
-        """获取指定行的代码片段"""
+        """Get code snippet for specified line"""
         try:
-            # 处理相对路径
+            # Handle relative paths
             if not file_path.startswith('/'):
                 full_path = os.path.join(self.testbed_path, file_path)
             else:
@@ -137,23 +137,23 @@ class CoverageXMLParser:
         return ""
     
     def _is_meaningful_code(self, code_snippet: str) -> bool:
-        """判断是否是有意义的代码行（不是注释或空行）"""
+        """Determine if it's a meaningful code line (not comment or empty line)"""
         if not code_snippet:
             return False
         
         stripped_code = code_snippet.strip()
         
-        # 过滤掉无意义的行
+        # Filter out meaningless lines
         meaningless_patterns = [
-            '',  # 空行
-            'pass',  # pass语句
-            '...',  # 省略号
+            '',  # Empty lines
+            'pass',  # pass statements
+            '...',  # Ellipsis
         ]
         
         if stripped_code in meaningless_patterns:
             return False
         
-        # 过滤掉注释
+        # Filter out comments
         if (stripped_code.startswith('#') or 
             stripped_code.startswith('"""') or 
             stripped_code.startswith("'''") or
@@ -164,7 +164,7 @@ class CoverageXMLParser:
         return True
     
     def _extract_function_name(self, file_path: str, line_number: int) -> str:
-        """尝试提取包含该行的函数名"""
+        """Try to extract the function name containing this line"""
         try:
             full_path = os.path.join(self.testbed_path, file_path) if not file_path.startswith('/') else file_path
             
@@ -174,12 +174,12 @@ class CoverageXMLParser:
             with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
                 lines = f.readlines()
             
-            # 向上查找最近的函数定义
+            # Search upward for the nearest function definition
             for i in range(line_number - 1, -1, -1):
                 if i < len(lines):
                     line = lines[i].strip()
                     if line.startswith('def ') and ':' in line:
-                        # 提取函数名
+                        # Extract function name
                         func_def = line[4:].split('(')[0].strip()
                         return func_def
             
@@ -190,7 +190,7 @@ class CoverageXMLParser:
 
 
 def main():
-    """主函数，用于命令行调用"""
+    """Main function for command line invocation"""
     if len(sys.argv) < 2:
         print("Usage: python xml_coverage_parser.py <xml_file_path> [testbed_path]")
         sys.exit(1)
@@ -201,7 +201,7 @@ def main():
     parser = CoverageXMLParser(testbed_path)
     result = parser.parse_xml_coverage(xml_file_path)
     
-    # 输出JSON格式的结果
+    # Output JSON format result
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
 

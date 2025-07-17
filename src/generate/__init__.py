@@ -29,7 +29,7 @@ __version__ = "1.0.0"
 __author__ = "Coverage Test Generator Team"
 
 __all__ = [
-    # 覆盖率分析
+    # Coverage analysis
     "CoverageAnalyzer",
     "PythonCoverageAnalyzer", 
     "JavaCoverageAnalyzer",
@@ -39,12 +39,12 @@ __all__ = [
     "create_coverage_analyzer",
     "analyze_project_coverage",
     
-    # 测试生成
+    # Test generation
     "CoverageBasedTestGenerator",
     "GeneratedTest",
     "TestPlacement",
     
-    # 配置
+    # Configuration
     "LLM_CONFIG",
     "COVERAGE_CONFIG",
     "TEST_GENERATION_CONFIG",

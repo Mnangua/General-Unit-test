@@ -27,7 +27,7 @@ class CallableType(Enum):
 
 @dataclass
 class CallableElement:
-    """表示一个可被调用的Java代码元素"""
+    """Represents a callable Java code element"""
     name: str
     callable_type: CallableType
     code: str
@@ -41,7 +41,7 @@ class CallableElement:
     parameters: List[str] = None
 
 class JavaCallableExtractor:
-    """Java代码可调用元素提取器"""
+    """Java code callable element extractor"""
     
     def __init__(self):
         self.language = Language(tree_sitter_java.language())
@@ -51,13 +51,13 @@ class JavaCallableExtractor:
         
     def extract_all_callable_elements(self, java_code: str) -> List[CallableElement]:
         """
-        提取Java代码中所有可能被其他代码调用的元素
+        Extract all elements in Java code that can be called by other code
         
         Args:
-            java_code: 完整的Java源代码字符串
+            java_code: Complete Java source code string
             
         Returns:
-            包含所有可调用元素的列表
+            List containing all callable elements
         """
         self.code = java_code
         self.code_bytes = java_code.encode('utf-8')
@@ -66,33 +66,33 @@ class JavaCallableExtractor:
         
         callable_elements = []
         
-        # 获取包名
+        # Get package name
         package_name = self._get_package_name(root_node)
         
-        # 提取类级别的可调用元素
+        # Extract class-level callable elements
         callable_elements.extend(self._extract_type_declarations(root_node, package_name))
         
-        # 提取方法和字段
+        # Extract methods and fields
         callable_elements.extend(self._extract_methods_and_fields(root_node, package_name))
         
         return callable_elements
     
     def _get_package_name(self, root_node) -> Optional[str]:
-        """提取包名"""
+        """Extract package name"""
         package_nodes = self._find_nodes_by_type(root_node, "package_declaration")
         if package_nodes:
             package_node = package_nodes[0]
-            # 查找scoped_identifier或identifier
+            # Find scoped_identifier or identifier
             identifiers = self._find_nodes_by_type(package_node, ["scoped_identifier", "identifier"])
             if identifiers:
                 return self._get_node_text(identifiers[0])
         return None
     
     def _extract_type_declarations(self, root_node, package_name: Optional[str]) -> List[CallableElement]:
-        """提取类、接口、枚举、注解声明"""
+        """Extract class, interface, enum, annotation declarations"""
         elements = []
         
-        # 查找所有类型声明
+        # Find all type declarations
         type_nodes = self._find_nodes_by_type(root_node, [
             "class_declaration", 
             "interface_declaration", 
@@ -108,7 +108,7 @@ class JavaCallableExtractor:
         return elements
     
     def _extract_type_declaration(self, node, package_name: Optional[str]) -> Optional[CallableElement]:
-        """提取单个类型声明"""
+        """Extract single type declaration"""
         modifiers = self._get_modifiers(node)
         name_node = node.child_by_field_name("name")
         if not name_node:
@@ -117,7 +117,7 @@ class JavaCallableExtractor:
         name = self._get_node_text(name_node)
         code = self._get_node_text(node)
         
-        # 确定类型
+        # Determine type
         if node.type == "class_declaration":
             callable_type = CallableType.PUBLIC_CLASS if "public" in modifiers else CallableType.PACKAGE_PRIVATE_CLASS
         elif node.type == "interface_declaration":
@@ -129,7 +129,7 @@ class JavaCallableExtractor:
         else:
             return None
             
-        # 构建签名
+        # Build signature
         modifier_str = ' '.join(modifiers) if modifiers else ''
         type_name = node.type.replace('_declaration', '')
         signature = f"{modifier_str} {type_name} {name}".strip()
@@ -147,10 +147,10 @@ class JavaCallableExtractor:
         )
     
     def _extract_methods_and_fields(self, root_node, package_name: Optional[str]) -> List[CallableElement]:
-        """提取方法和字段"""
+        """Extract methods and fields"""
         elements = []
         
-        # 查找所有类和接口
+        # Find all classes and interfaces
         type_nodes = self._find_nodes_by_type(root_node, [
             "class_declaration", 
             "interface_declaration", 
@@ -163,7 +163,7 @@ class JavaCallableExtractor:
             if name_node:
                 class_name = self._get_node_text(name_node)
             
-            # 提取方法
+            # Extract methods
             method_nodes = self._find_nodes_by_type(type_node, [
                 "method_declaration", 
                 "constructor_declaration"
@@ -174,7 +174,7 @@ class JavaCallableExtractor:
                 if element:
                     elements.append(element)
             
-            # 提取字段
+            # Extract fields
             field_nodes = self._find_nodes_by_type(type_node, "field_declaration")
             for field_node in field_nodes:
                 field_elements = self._extract_fields(field_node, package_name, class_name)
@@ -183,33 +183,33 @@ class JavaCallableExtractor:
         return elements
     
     def _extract_method(self, node, package_name: Optional[str], class_name: Optional[str]) -> Optional[CallableElement]:
-        """提取方法声明"""
+        """Extract method declaration"""
         modifiers = self._get_modifiers(node)
         
-        # 跳过私有方法
+        # Skip private methods
         if "private" in modifiers:
             return None
             
-        # 获取方法名
+        # Get method name
         name_node = node.child_by_field_name("name")
         if not name_node and node.type == "constructor_declaration":
-            # 构造函数使用类名
+            # Constructor uses class name
             name = class_name or "constructor"
         elif name_node:
             name = self._get_node_text(name_node)
         else:
             return None
         
-        # 获取返回类型
+        # Get return type
         return_type = None
         type_node = node.child_by_field_name("type")
         if type_node:
             return_type = self._get_node_text(type_node)
         
-        # 获取参数
+        # Get parameters
         parameters = self._extract_parameters(node)
         
-        # 确定方法类型
+        # Determine method type
         if node.type == "constructor_declaration":
             if "public" in modifiers:
                 callable_type = CallableType.PUBLIC_CONSTRUCTOR
@@ -224,7 +224,7 @@ class JavaCallableExtractor:
         else:
             callable_type = CallableType.PACKAGE_PRIVATE_METHOD
         
-        # 构建签名
+        # Build signature
         modifier_str = ' '.join(modifiers) if modifiers else ''
         param_str = ", ".join(parameters) if parameters else ""
         
@@ -251,19 +251,19 @@ class JavaCallableExtractor:
         )
     
     def _extract_fields(self, node, package_name: Optional[str], class_name: Optional[str]) -> List[CallableElement]:
-        """提取字段声明（一个字段声明可能包含多个变量）"""
+        """Extract field declarations (one field declaration may contain multiple variables)"""
         elements = []
         modifiers = self._get_modifiers(node)
         
-        # 跳过私有字段
+        # Skip private fields
         if "private" in modifiers:
             return elements
         
-        # 获取字段类型
+        # Get field type
         type_node = node.child_by_field_name("type")
         field_type = self._get_node_text(type_node) if type_node else "unknown"
         
-        # 查找所有变量声明
+        # Find all variable declarations
         variable_nodes = self._find_nodes_by_type(node, "variable_declarator")
         
         for var_node in variable_nodes:
@@ -273,10 +273,10 @@ class JavaCallableExtractor:
                 
             name = self._get_node_text(name_node)
             
-            # 检查是否是常量（final static）
+            # Check if it's a constant (final static)
             is_constant = "final" in modifiers and "static" in modifiers
             
-            # 确定字段类型
+            # Determine field type
             if is_constant:
                 if "public" in modifiers:
                     callable_type = CallableType.PUBLIC_CONSTANT
@@ -291,11 +291,11 @@ class JavaCallableExtractor:
             else:
                 callable_type = CallableType.PACKAGE_PRIVATE_FIELD
             
-            # 构建签名
+            # Build signature
             modifier_str = ' '.join(modifiers) if modifiers else ''
             signature = f"{modifier_str} {field_type} {name}".strip()
             
-            # 获取完整的字段声明代码
+            # Get complete field declaration code
             code = self._get_node_text(node)
             
             elements.append(CallableElement(
@@ -314,7 +314,7 @@ class JavaCallableExtractor:
         return elements
     
     def _extract_parameters(self, method_node) -> List[str]:
-        """提取方法参数"""
+        """Extract method parameters"""
         parameters = []
         param_list_node = method_node.child_by_field_name("parameters")
         
@@ -332,13 +332,13 @@ class JavaCallableExtractor:
         return parameters
     
     def _get_modifiers(self, node) -> List[str]:
-        """提取节点的直接修饰符（修复版本）"""
+        """Extract node's direct modifiers (fixed version)"""
         modifiers = []
         
-        # 只查找当前节点的直接子节点中的modifiers
+        # Only find modifiers in direct child nodes of current node
         for child in node.children:
             if child.type == "modifiers":
-                # 遍历modifiers节点的直接子节点
+                # Iterate through direct child nodes of modifiers node
                 for modifier_child in child.children:
                     if modifier_child.type in [
                         "public", "private", "protected", "static", "final", 
@@ -346,12 +346,12 @@ class JavaCallableExtractor:
                         "transient", "volatile"
                     ]:
                         modifiers.append(modifier_child.type)
-                break  # 找到第一个modifiers节点后就退出
+                break  # Exit after finding the first modifiers node
                     
         return modifiers
     
     def _find_nodes_by_type(self, root_node, node_types) -> List:
-        """查找指定类型的所有节点"""
+        """Find all nodes of specified types"""
         if isinstance(node_types, str):
             node_types = [node_types]
             
@@ -367,11 +367,11 @@ class JavaCallableExtractor:
         return result
     
     def _get_node_text(self, node) -> str:
-        """获取节点对应的文本"""
+        """Get text corresponding to node"""
         return self.code_bytes[node.start_byte:node.end_byte].decode('utf-8')
     
     def group_by_type(self, elements: List[CallableElement]) -> Dict[CallableType, List[CallableElement]]:
-        """按类型分组可调用元素"""
+        """Group callable elements by type"""
         grouped = {}
         for element in elements:
             if element.callable_type not in grouped:
@@ -380,7 +380,7 @@ class JavaCallableExtractor:
         return grouped
     
     def filter_public_only(self, elements: List[CallableElement]) -> List[CallableElement]:
-        """只保留公有的可调用元素"""
+        """Keep only public callable elements"""
         public_types = {
             CallableType.PUBLIC_CLASS,
             CallableType.PUBLIC_INTERFACE,
@@ -394,7 +394,7 @@ class JavaCallableExtractor:
         return [elem for elem in elements if elem.callable_type in public_types]
     
     def filter_static_only(self, elements: List[CallableElement]) -> List[CallableElement]:
-        """只保留静态的可调用元素"""
+        """Keep only static callable elements"""
         static_types = {
             CallableType.STATIC_METHOD,
             CallableType.STATIC_FIELD,
@@ -403,9 +403,9 @@ class JavaCallableExtractor:
         return [elem for elem in elements if elem.callable_type in static_types or "static" in elem.modifiers]
 
 def main():
-    """示例使用"""
+    """Example usage"""
     
-    # 示例Java代码
+    # Sample Java code
     sample_java_code = """
 package com.example.demo;
 
@@ -413,7 +413,7 @@ import java.util.List;
 import java.util.ArrayList;
 
 /**
- * 示例类用于演示可调用元素提取
+ * Example class for demonstrating callable element extraction
  */
 public class DemoService {
     
@@ -480,38 +480,38 @@ class PackagePrivateClass {
 }
 """
     
-    # 创建提取器并提取可调用元素
+    # Create extractor and extract callable elements
     extractor = JavaCallableExtractor()
     callable_elements = extractor.extract_all_callable_elements(sample_java_code)
     
-    print(f"提取到 {len(callable_elements)} 个可调用元素:\n")
+    print(f"Extracted {len(callable_elements)} callable elements:\n")
     
-    # 按类型分组显示
+    # Display grouped by type
     grouped = extractor.group_by_type(callable_elements)
     
     for callable_type, elements in grouped.items():
         print(f"\n=== {callable_type.value.upper()} ===")
         for element in elements:
-            print(f"名称: {element.name}")
-            print(f"签名: {element.signature}")
-            print(f"行数: {element.line_start}-{element.line_end}")
+            print(f"Name: {element.name}")
+            print(f"Signature: {element.signature}")
+            print(f"Lines: {element.line_start}-{element.line_end}")
             if element.package_name:
-                print(f"包名: {element.package_name}")
+                print(f"Package: {element.package_name}")
             if element.class_name:
-                print(f"类名: {element.class_name}")
-            print(f"修饰符: {element.modifiers}")
-            print("代码:")
+                print(f"Class: {element.class_name}")
+            print(f"Modifiers: {element.modifiers}")
+            print("Code:")
             print(element.code[:200] + "..." if len(element.code) > 200 else element.code)
             print("-" * 50)
     
-    # 只显示公有元素
-    print("\n\n=== 只显示公有可调用元素 ===")
+    # Show only public elements
+    print("\n\n=== Show only public callable elements ===")
     public_elements = extractor.filter_public_only(callable_elements)
     for element in public_elements:
         print(f"{element.callable_type.value}: {element.signature}")
     
-    # 只显示静态元素
-    print("\n\n=== 只显示静态可调用元素 ===")
+    # Show only static elements
+    print("\n\n=== Show only static callable elements ===")
     static_elements = extractor.filter_static_only(callable_elements)
     for element in static_elements:
         print(f"{element.callable_type.value}: {element.signature}")

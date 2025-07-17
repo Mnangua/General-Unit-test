@@ -10,15 +10,15 @@ w_space = set(string.whitespace.encode("utf-8"))
 
 @dataclass
 class ImportStatement:
-    """表示一个import语句"""
-    raw_statement: str      # 完整的import语句
-    import_type: str        # "import" 或 "from_import" (Python) / "java_import" 或 "java_static_import" (Java)
-    module_name: str        # 被导入的模块名
-    imported_names: List[str]  # 被导入的具体名称
-    alias: Optional[str] = None  # 别名
-    line_number: int = 0    # 行号
-    is_static: bool = False # 是否是静态导入 (Java)
-    is_wildcard: bool = False # 是否是通配符导入 (Java)
+    """Represents an import statement"""
+    raw_statement: str      # Complete import statement
+    import_type: str        # "import" or "from_import" (Python) / "java_import" or "java_static_import" (Java)
+    module_name: str        # Name of imported module
+    imported_names: List[str]  # Specific names being imported
+    alias: Optional[str] = None  # Alias
+    line_number: int = 0    # Line number
+    is_static: bool = False # Whether it's a static import (Java)
+    is_wildcard: bool = False # Whether it's a wildcard import (Java)
 
 def tokenize(file_bytes, node, whitespace=True):
     compound_lits = ("concatenated_string, string_array", "chained_string")
@@ -142,7 +142,7 @@ class PythonParser(BaseLangParser):
         super().__init__(tree_sitter_python)  
   
     def import_nodes(self, root):  
-        # Python 的 import 和 from_import  
+        # Python's import and from_import  
         return self.post_traverse_target_type(root, ["import_statement", "import_from_statement"], godeep=True)  
   
     def class_nodes(self, root):  
@@ -150,20 +150,20 @@ class PythonParser(BaseLangParser):
 
     def collect_all_imports(self, text_code: str) -> List[ImportStatement]:
         """
-        收集所有的import语句，返回详细的ImportStatement列表
+        Collect all import statements, return detailed ImportStatement list
         
         Args:
-            text_code: Python源代码字符串
+            text_code: Python source code string
             
         Returns:
-            包含所有import语句详细信息的列表
+            List containing detailed information of all import statements
         """
         self.code_bytes = bytes(text_code, "utf8")
         self.tree = self.parser.parse(self.code_bytes)
         
         import_statements = []
         
-        # 获取所有import节点
+        # Get all import nodes
         import_nodes = self.import_nodes(self.tree.root_node)
         
         for node in import_nodes:
@@ -174,7 +174,7 @@ class PythonParser(BaseLangParser):
         return import_statements
     
     def _parse_import_node(self, node) -> Optional[ImportStatement]:
-        """解析单个import节点"""
+        """Parse single import node"""
         raw_statement = self.get_node_str(node).strip()
         line_number = node.start_point[0] + 1
         
@@ -186,18 +186,18 @@ class PythonParser(BaseLangParser):
         return None
     
     def _parse_import_statement(self, node, raw_statement: str, line_number: int) -> ImportStatement:
-        """解析普通import语句: import module [as alias]"""
+        """Parse regular import statement: import module [as alias]"""
         imported_names = []
         module_name = ""
         alias = None
         
-        # 查找导入的模块名和别名
+        # Find imported module names and aliases
         for child in node.children:
             if child.type == "dotted_name":
                 module_name = self._get_dotted_name(child)
                 imported_names.append(module_name)
             elif child.type == "aliased_import":
-                # 处理 import module as alias
+                # Handle import module as alias
                 name_node = child.child_by_field_name("name")
                 alias_node = child.child_by_field_name("alias")
                 if name_node:
@@ -222,11 +222,11 @@ class PythonParser(BaseLangParser):
         )
     
     def _parse_from_import_statement(self, node, raw_statement: str, line_number: int) -> ImportStatement:
-        """解析from import语句: from module import name1, name2 [as alias]"""
+        """Parse from import statement: from module import name1, name2 [as alias]"""
         module_name = ""
         imported_names = []
         
-        # 查找模块名
+        # Find module name
         module_node = node.child_by_field_name("module_name")
         if module_node:
             if module_node.type == "dotted_name":
@@ -236,7 +236,7 @@ class PythonParser(BaseLangParser):
             else:
                 module_name = self.get_node_str(module_node)
         
-        # 查找导入的名称
+        # Find imported names
         name_node = node.child_by_field_name("name")
         if name_node:
             if name_node.type == "wildcard_import":
@@ -246,12 +246,12 @@ class PythonParser(BaseLangParser):
             elif name_node.type == "identifier":
                 imported_names.append(self.get_node_str(name_node))
             elif name_node.type == "import_list":
-                # 处理多个导入名称
+                # Handle multiple import names
                 for child in name_node.children:
                     if child.type == "identifier":
                         imported_names.append(self.get_node_str(child))
                     elif child.type == "aliased_import":
-                        # 处理 from module import name as alias
+                        # Handle from module import name as alias
                         import_name_node = child.child_by_field_name("name")
                         if import_name_node:
                             imported_names.append(self.get_node_str(import_name_node))
@@ -267,7 +267,7 @@ class PythonParser(BaseLangParser):
         )
     
     def _get_dotted_name(self, node) -> str:
-        """获取点分割的名称，如 package.module.submodule"""
+        """Get dot-separated name, like package.module.submodule"""
         return self.get_node_str(node)
 
 class JavaParser(BaseLangParser):  
@@ -286,7 +286,7 @@ class JavaParser(BaseLangParser):
         
         import_statements = []
         
-        # 获取所有import节点
+        # Get all import nodes
         import_nodes = self.import_nodes(self.tree.root_node)
         
         for node in import_nodes:
@@ -297,7 +297,7 @@ class JavaParser(BaseLangParser):
         return import_statements
 
     def _parse_java_import_node(self, node) -> Optional[ImportStatement]:
-        """解析单个Java import节点"""
+        """Parse single Java import node"""
         raw_statement = self.get_node_str(node).strip()
         line_number = node.start_point[0] + 1
         
@@ -308,8 +308,8 @@ class JavaParser(BaseLangParser):
     
     def _parse_java_import_declaration(self, node, raw_statement: str, line_number: int) -> ImportStatement:
         """
-        解析Java import声明
-        支持的格式:
+        Parse Java import declaration
+        Supported formats:
         - import package.ClassName;
         - import package.*;
         - import static package.ClassName.methodName;
@@ -320,28 +320,28 @@ class JavaParser(BaseLangParser):
         is_static = False
         is_wildcard = False
         
-        # 检查是否是静态导入
+        # Check if it's a static import
         for child in node.children:
             if child.type == "static" or self.get_node_str(child).strip() == "static":
                 is_static = True
                 break
         
-        # 查找导入的包名和类名
+        # Find imported package and class names
         for child in node.children:
             if child.type == "scoped_identifier":
-                # 处理完整的包.类名
+                # Handle full package.ClassName
                 full_name = self.get_node_str(child)
                 if full_name.endswith("*"):
-                    # 通配符导入: package.*
+                    # Wildcard import: package.*
                     is_wildcard = True
-                    module_name = full_name[:-2]  # 移除.*
+                    module_name = full_name[:-2]  # Remove .*
                     imported_names.append("*")
                 else:
-                    # 具体类或方法导入
+                    # Specific class or method import
                     parts = full_name.split(".")
                     if len(parts) > 1:
                         if is_static:
-                            # 静态导入: package.ClassName.methodName
+                            # Static import: package.ClassName.methodName
                             if len(parts) >= 3:
                                 module_name = ".".join(parts[:-2])  # package
                                 class_name = parts[-2]  # ClassName
@@ -351,28 +351,28 @@ class JavaParser(BaseLangParser):
                                 module_name = ".".join(parts[:-1])
                                 imported_names.append(parts[-1])
                         else:
-                            # 普通导入: package.ClassName
+                            # Regular import: package.ClassName
                             module_name = ".".join(parts[:-1])  # package
                             imported_names.append(parts[-1])   # ClassName
                     else:
-                        # 单个名称
+                        # Single name
                         module_name = ""
                         imported_names.append(full_name)
                         
             elif child.type == "identifier":
-                # 处理简单的标识符
+                # Handle simple identifier
                 identifier = self.get_node_str(child)
                 if identifier not in ["import", "static", ";"]:
                     if not module_name and not imported_names:
-                        # 如果还没有找到模块名，这可能是一个简单的类名
+                        # If no module name found yet, this might be a simple class name
                         imported_names.append(identifier)
                         
             elif child.type == "asterisk" or self.get_node_str(child).strip() == "*":
-                # 通配符导入
+                # Wildcard import
                 is_wildcard = True
                 imported_names.append("*")
         
-        # 确定导入类型
+        # Determine import type
         if is_static:
             import_type = "java_static_import"
         else:
@@ -389,9 +389,9 @@ class JavaParser(BaseLangParser):
         )
 
 
-# 测试用例  
+# Test cases  
 if __name__ == "__main__":  
-    # Python 示例代码，包含各种import语句
+    # Python sample code with various import statements
     python_code_with_imports = """  
 import os  
 import sys as system
@@ -413,28 +413,28 @@ def example_function():
 
     python_parser = PythonParser()  
     
-    # 测试原有的import_statements方法
-    print("=== 原有的import_statements方法 ===")
+    # Test original import_statements method
+    print("=== Original import_statements method ===")
     import_statements = python_parser.import_statements(python_code_with_imports)
     for i, stmt in enumerate(import_statements, 1):
         print(f"{i}. {stmt}")
     
-    print(f"\n总共找到 {len(import_statements)} 个import语句\n")
+    print(f"\nFound a total of {len(import_statements)} import statements\n")
     
-    # 测试新的collect_all_imports方法
-    print("=== 新的collect_all_imports方法 ===")
+    # Test new collect_all_imports method
+    print("=== New collect_all_imports method ===")
     detailed_imports = python_parser.collect_all_imports(python_code_with_imports)
     
     for imp in detailed_imports:
-        print(f"行 {imp.line_number}: {imp.raw_statement}")
-        print(f"  类型: {imp.import_type}")
-        print(f"  模块: {imp.module_name}")
-        print(f"  导入的名称: {imp.imported_names}")
+        print(f"Line {imp.line_number}: {imp.raw_statement}")
+        print(f"  Type: {imp.import_type}")
+        print(f"  Module: {imp.module_name}")
+        print(f"  Imported names: {imp.imported_names}")
         if imp.alias:
-            print(f"  别名: {imp.alias}")
+            print(f"  Alias: {imp.alias}")
         print("-" * 40)
 
-    # Java示例代码，包含各种import语句
+    # Java sample code with various import statements
     java_code_with_imports = """
 package com.example.demo;
 
@@ -456,18 +456,18 @@ public class Example {
 """
 
 
-    # 测试Java import收集
+    # Test Java import collection
     java_parser = JavaParser()
     java_imports = java_parser.collect_all_imports(java_code_with_imports)
-    print(f"找到 {len(java_imports)} 个Java import语句:")
+    print(f"Found {len(java_imports)} Java import statements:")
     
     for imp in java_imports:
-        print(f"行 {imp.line_number}: {imp.raw_statement}")
-        print(f"  类型: {imp.import_type}")
-        print(f"  包名: {imp.module_name}")
-        print(f"  导入名称: {imp.imported_names}")
+        print(f"Line {imp.line_number}: {imp.raw_statement}")
+        print(f"  Type: {imp.import_type}")
+        print(f"  Package: {imp.module_name}")
+        print(f"  Import names: {imp.imported_names}")
         if imp.is_static:
-            print(f"  静态导入: 是")
+            print(f"  Static import: Yes")
         if imp.is_wildcard:
-            print(f"  通配符导入: 是")
+            print(f"  Wildcard import: Yes")
         print("-" * 40)

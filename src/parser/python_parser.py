@@ -30,7 +30,7 @@ class CallableType(Enum):
 
 @dataclass
 class CallableElement:
-    """表示一个可被调用的Python代码元素"""
+    """Represents a callable Python code element"""
     name: str
     callable_type: CallableType
     code: str
@@ -47,7 +47,7 @@ class CallableElement:
     is_exported: bool = True
 
 class PythonCallableExtractor:
-    """Python代码可调用元素提取器"""
+    """Python code callable element extractor"""
     
     def __init__(self):
         self.language = Language(tree_sitter_python.language())
@@ -58,13 +58,13 @@ class PythonCallableExtractor:
         
     def extract_all_callable_elements(self, python_code: str) -> List[CallableElement]:
         """
-        提取Python代码中所有可能被其他代码调用的元素
+        Extract all elements that can be called by other code from Python code
         
         Args:
-            python_code: 完整的Python源代码字符串
+            python_code: Complete Python source code string
             
         Returns:
-            包含所有可调用元素的列表
+            List containing all callable elements
         """
         self.code = python_code
         self.code_bytes = python_code.encode('utf-8')
@@ -74,22 +74,22 @@ class PythonCallableExtractor:
         
         callable_elements = []
         
-        # 提取模块级别的可调用元素
+        # Extract module-level callable elements
         callable_elements.extend(self._extract_module_level_elements(root_node))
         
-        # 提取类和其成员
+        # Extract classes and their members
         callable_elements.extend(self._extract_classes_and_members(root_node))
         
-        # 提取全局变量和常量
+        # Extract global variables and constants
         callable_elements.extend(self._extract_global_variables(root_node))
         
         return callable_elements
     
     def _extract_module_level_elements(self, root_node) -> List[CallableElement]:
-        """提取模块级别的函数和类"""
+        """Extract module-level functions and classes"""
         elements = []
         
-        # 查找模块级别的函数定义
+        # Find module-level function definitions
         for child in root_node.children:
             if child.type in ["function_definition", "async_function_definition"]:
                 element = self._extract_function(child, None)
@@ -107,7 +107,7 @@ class PythonCallableExtractor:
         return elements
     
     def _extract_classes_and_members(self, root_node) -> List[CallableElement]:
-        """提取类及其成员方法"""
+        """Extract classes and their member methods"""
         elements = []
         
         class_nodes = self._find_nodes_by_type(root_node, "class_definition")
@@ -115,7 +115,7 @@ class PythonCallableExtractor:
         for class_node in class_nodes:
             class_name = self._get_class_name(class_node)
             
-            # 提取类中的方法
+            # Extract methods in class
             method_nodes = self._find_direct_children_by_type(class_node, [
                 "function_definition", 
                 "async_function_definition",
@@ -133,7 +133,7 @@ class PythonCallableExtractor:
         return elements
     
     def _extract_class(self, node) -> Optional[CallableElement]:
-        """提取类定义"""
+        """Extract class definition"""
         name_node = node.child_by_field_name("name")
         if not name_node:
             return None
@@ -141,21 +141,21 @@ class PythonCallableExtractor:
         name = self._get_node_text(name_node)
         code = self._get_node_text(node)
         
-        # 获取装饰器
+        # Get decorators
         decorators = self._get_decorators_for_node(node)
         
-        # 获取文档字符串
+        # Get docstring
         docstring = self._extract_docstring(node)
         
-        # 获取基类
+        # Get base classes
         bases = self._get_base_classes(node)
         
-        # 构建签名
+        # Build signature
         base_str = f"({', '.join(bases)})" if bases else ""
         decorator_str = '\n'.join([f"@{dec}" for dec in decorators])
         signature = f"{decorator_str}\nclass {name}{base_str}:".strip()
         
-        # 判断是否是公有类
+        # Determine if it's a public class
         is_public = not name.startswith('_')
         
         callable_type = CallableType.DECORATED_CLASS if decorators else CallableType.CLASS
@@ -174,7 +174,7 @@ class PythonCallableExtractor:
         )
     
     def _extract_function(self, node, class_name: Optional[str]) -> Optional[CallableElement]:
-        """提取函数或方法定义"""
+        """Extract function or method definition"""
         name_node = node.child_by_field_name("name")
         if not name_node:
             return None
@@ -182,25 +182,25 @@ class PythonCallableExtractor:
         name = self._get_node_text(name_node)
         code = self._get_node_text(node)
         
-        # 获取装饰器
+        # Get decorators
         decorators = self._get_decorators_for_node(node)
         
-        # 获取文档字符串
+        # Get docstring
         docstring = self._extract_docstring(node)
         
-        # 获取参数
+        # Get parameters
         parameters = self._extract_parameters(node)
         
-        # 获取返回类型注解
+        # Get return type annotation
         return_annotation = self._extract_return_annotation(node)
         
-        # 确定函数类型
+        # Determine function type
         callable_type = self._determine_function_type(node, name, decorators, class_name)
         
-        # 构建签名
+        # Build signature
         signature = self._build_function_signature(node, name, parameters, return_annotation, decorators)
         
-        # 判断可见性
+        # Determine visibility
         is_public = self._is_public_function(name, class_name)
         
         return CallableElement(
@@ -219,14 +219,14 @@ class PythonCallableExtractor:
         )
     
     def _extract_decorated_definition(self, node, class_name: Optional[str]) -> Optional[CallableElement]:
-        """提取装饰器定义"""
-        # 查找装饰器节点
+        """Extract decorator definition"""
+        # Find decorator nodes
         decorators = []
         target_node = None
         
         for child in node.children:
             if child.type == "decorator":
-                decorator_text = self._get_node_text(child)[1:]  # 移除@符号
+                decorator_text = self._get_node_text(child)[1:]  # Remove @ symbol
                 decorators.append(decorator_text)
             elif child.type in ["function_definition", "async_function_definition", "class_definition"]:
                 target_node = child
@@ -239,7 +239,7 @@ class PythonCallableExtractor:
             if element:
                 element.decorators = decorators
                 element.callable_type = CallableType.DECORATED_CLASS
-                # 重新构建签名
+                # Rebuild signature
                 decorator_str = '\n'.join([f"@{dec}" for dec in decorators])
                 element.signature = f"{decorator_str}\n{element.signature}"
             return element
@@ -248,20 +248,20 @@ class PythonCallableExtractor:
             if element:
                 element.decorators = decorators
                 element.callable_type = CallableType.DECORATED_FUNCTION
-                # 重新构建签名
+                # Rebuild signature
                 decorator_str = '\n'.join([f"@{dec}" for dec in decorators])
                 element.signature = f"{decorator_str}\n{element.signature}"
             return element
     
     def _extract_global_variables(self, root_node) -> List[CallableElement]:
-        """提取全局变量和常量"""
+        """Extract global variables and constants"""
         elements = []
         
-        # 查找赋值语句
+        # Find assignment statements
         assignment_nodes = self._find_nodes_by_type(root_node, "assignment")
         
         for assignment in assignment_nodes:
-            # 确保是模块级别的赋值
+            # Ensure it's a module-level assignment
             if self._is_module_level_assignment(assignment, root_node):
                 var_elements = self._extract_assignment_variables(assignment)
                 elements.extend(var_elements)
@@ -389,23 +389,23 @@ class PythonCallableExtractor:
         return parameters
     
     def _extract_return_annotation(self, function_node) -> Optional[str]:
-        """提取返回类型注解"""
+        """Extract return type annotation"""
         return_type_node = function_node.child_by_field_name("return_type")
         return self._get_node_text(return_type_node) if return_type_node else None
     
     def _determine_function_type(self, node, name: str, decorators: List[str], class_name: Optional[str]) -> CallableType:
-        """确定函数类型"""
-        # 检查是否是异步函数
+        """Determine function type"""
+        # Check if it's an async function
         is_async = node.type == "async_function_definition"
         
-        # 如果不在类中，就是普通函数
+        # If not in a class, it's a regular function
         if not class_name:
             if decorators:
                 return CallableType.DECORATED_FUNCTION
             return CallableType.ASYNC_FUNCTION if is_async else CallableType.FUNCTION
         
-        # 在类中的函数是方法
-        # 检查特殊装饰器
+        # Functions in classes are methods
+        # Check special decorators
         for decorator in decorators:
             if "staticmethod" in decorator:
                 return CallableType.STATIC_METHOD
@@ -414,37 +414,37 @@ class PythonCallableExtractor:
             elif "property" in decorator:
                 return CallableType.PROPERTY
         
-        # 检查魔术方法
+        # Check magic methods
         if name.startswith('__') and name.endswith('__'):
             return CallableType.MAGIC_METHOD
         
-        # 检查可见性
+        # Check visibility
         if name.startswith('__'):
             return CallableType.PRIVATE_METHOD
         elif name.startswith('_'):
             return CallableType.PROTECTED_METHOD
         
-        # 普通方法
+        # Regular method
         if decorators:
             return CallableType.DECORATED_FUNCTION
         return CallableType.ASYNC_METHOD if is_async else CallableType.METHOD
     
     def _build_function_signature(self, node, name: str, parameters: List[str], 
                                  return_annotation: Optional[str], decorators: List[str]) -> str:
-        """构建函数签名"""
+        """Build function signature"""
         is_async = node.type == "async_function_definition"
         
-        # 构建参数字符串
+        # Build parameter string
         param_str = ", ".join(parameters) if parameters else ""
         
-        # 构建返回类型
+        # Build return type
         return_str = f" -> {return_annotation}" if return_annotation else ""
         
-        # 构建基本签名
+        # Build basic signature
         async_str = "async " if is_async else ""
         signature = f"{async_str}def {name}({param_str}){return_str}:"
         
-        # 添加装饰器
+        # Add decorators
         if decorators:
             decorator_str = '\n'.join([f"@{dec}" for dec in decorators])
             signature = f"{decorator_str}\n{signature}"
@@ -452,26 +452,26 @@ class PythonCallableExtractor:
         return signature
     
     def _is_public_function(self, name: str, class_name: Optional[str]) -> bool:
-        """判断函数是否是公有的"""
-        # 以单下划线开头的是受保护的，双下划线是私有的
-        # 但魔术方法（__init__等）是公有的
+        """Determine if function is public"""
+        # Functions starting with single underscore are protected, double underscore are private
+        # But magic methods (__init__ etc.) are public
         if name.startswith('__') and name.endswith('__'):
-            return True  # 魔术方法是公有的
+            return True  # Magic methods are public
         return not name.startswith('_')
     
     def _is_module_level_assignment(self, assignment_node, root_node) -> bool:
-        """检查赋值是否在模块级别"""
-        # 简单检查：看看赋值的父节点是否是根节点
+        """Check if assignment is at module level"""
+        # Simple check: see if assignment's parent node is the root node
         parent = assignment_node.parent
         return parent == root_node
     
     def _extract_identifiers_from_assignment_left(self, left_node) -> List[str]:
-        """从赋值左侧提取标识符"""
+        """Extract identifiers from assignment left side"""
         identifiers = []
         
         if left_node.type == "identifier":
             identifiers.append(self._get_node_text(left_node))
-        elif left_node.type == "pattern_list":  # 元组解包
+        elif left_node.type == "pattern_list":  # Tuple unpacking
             for child in left_node.children:
                 if child.type == "identifier":
                     identifiers.append(self._get_node_text(child))
@@ -479,7 +479,7 @@ class PythonCallableExtractor:
         return identifiers
     
     def _find_nodes_by_type(self, root_node, node_types) -> List:
-        """查找指定类型的所有节点"""
+        """Find all nodes of specified types"""
         if isinstance(node_types, str):
             node_types = [node_types]
             
@@ -495,13 +495,13 @@ class PythonCallableExtractor:
         return result
     
     def _find_direct_children_by_type(self, parent_node, node_types) -> List:
-        """查找直接子节点中指定类型的节点"""
+        """Find direct child nodes of specified types"""
         if isinstance(node_types, str):
             node_types = [node_types]
             
         result = []
         
-        # 查找类体
+        # Find class body
         body_node = parent_node.child_by_field_name("body")
         if body_node:
             for child in body_node.children:
@@ -511,11 +511,11 @@ class PythonCallableExtractor:
         return result
     
     def _get_node_text(self, node) -> str:
-        """获取节点对应的文本"""
+        """Get text corresponding to node"""
         return self.code_bytes[node.start_byte:node.end_byte].decode('utf-8')
     
     def group_by_type(self, elements: List[CallableElement]) -> Dict[CallableType, List[CallableElement]]:
-        """按类型分组可调用元素"""
+        """Group callable elements by type"""
         grouped = {}
         for element in elements:
             if element.callable_type not in grouped:
@@ -524,159 +524,159 @@ class PythonCallableExtractor:
         return grouped
     
     def filter_public_only(self, elements: List[CallableElement]) -> List[CallableElement]:
-        """只保留公有的可调用元素"""
+        """Keep only public callable elements"""
         return [elem for elem in elements if elem.is_public]
     
     def filter_by_type(self, elements: List[CallableElement], types: List[CallableType]) -> List[CallableElement]:
-        """按类型过滤元素"""
+        """Filter elements by specified types"""
         return [elem for elem in elements if elem.callable_type in types]
     
     def get_exported_elements(self, elements: List[CallableElement], 
                             all_names: Optional[List[str]] = None) -> List[CallableElement]:
-        """获取导出的元素（基于__all__列表）"""
+        """Get exported elements (based on __all__ list)"""
         if all_names is None:
-            # 如果没有__all__，返回所有公有元素
+            # If no __all__, return all public elements
             return self.filter_public_only(elements)
         
-        # 根据__all__过滤
+        # Filter based on __all__
         all_names_set = set(all_names)
         return [elem for elem in elements if elem.name in all_names_set]
 
 def main():
-    """示例使用"""
+    """Example usage"""
     
-    # 示例Python代码
+    # Sample Python code
     sample_python_code = '''
 """
-示例模块用于演示可调用元素提取
+Example module for demonstrating callable element extraction
 """
 
 import os
 from typing import List, Optional
 
-# 全局常量
+# Global constants
 API_VERSION = "1.0.0"
 MAX_CONNECTIONS = 100
 
-# 全局变量
+# Global variables
 _internal_cache = {}
 debug_mode = False
 
 def public_function(param1: str, param2: int = 10) -> str:
-    """这是一个公有函数"""
+    """This is a public function"""
     return f"{param1}: {param2}"
 
 async def async_function(data: List[str]) -> None:
-    """异步函数示例"""
+    """Async function example"""
     pass
 
 def _private_function():
-    """私有函数"""
+    """Private function"""
     pass
 
 @property
 def decorated_function():
-    """装饰器函数"""
+    """Decorated function"""
     return "decorated"
 
 class PublicClass:
-    """公有类示例"""
+    """Public class example"""
     
     class_variable = "class_var"
     _protected_variable = "protected"
     
     def __init__(self, name: str):
-        """构造函数"""
+        """Constructor"""
         self.name = name
         self._internal = None
     
     def public_method(self) -> str:
-        """公有方法"""
+        """Public method"""
         return self.name
     
     def _protected_method(self):
-        """受保护方法"""
+        """Protected method"""
         return self._internal
     
     def __private_method(self):
-        """私有方法"""
+        """Private method"""
         pass
     
     @staticmethod
     def static_method(value: int) -> int:
-        """静态方法"""
+        """Static method"""
         return value * 2
     
     @classmethod
     def class_method(cls, name: str):
-        """类方法"""
+        """Class method"""
         return cls(name)
     
     @property
     def name_property(self) -> str:
-        """属性"""
+        """Property"""
         return self.name
     
     async def async_method(self):
-        """异步方法"""
+        """Async method"""
         pass
     
     def __str__(self) -> str:
-        """魔术方法"""
+        """Magic method"""
         return f"PublicClass({self.name})"
 
 @dataclass
 class DataClass:
-    """装饰器类"""
+    """Decorator class"""
     value: int
     name: str = "default"
 
 class _PrivateClass:
-    """私有类"""
+    """Private class"""
     pass
 
-# Lambda函数
+# Lambda function
 lambda_func = lambda x: x * 2
 
-# 元组解包赋值
+# Tuple unpacking assignment
 a, b = 1, 2
 '''
     
-    # 创建提取器并提取可调用元素
+    # Create extractor and extract callable elements
     extractor = PythonCallableExtractor()
     callable_elements = extractor.extract_all_callable_elements(sample_python_code)
     
-    print(f"提取到 {len(callable_elements)} 个可调用元素:\n")
+    print(f"Extracted {len(callable_elements)} callable elements:\n")
     
-    # 按类型分组显示
+    # Display grouped by type
     grouped = extractor.group_by_type(callable_elements)
     
     for callable_type, elements in grouped.items():
         print(f"\n=== {callable_type.value.upper().replace('_', ' ')} ===")
         for element in elements:
-            print(f"名称: {element.name}")
-            print(f"签名: {element.signature}")
-            print(f"行数: {element.line_start}-{element.line_end}")
-            print(f"装饰器: {element.decorators}")
-            print(f"公有: {element.is_public}")
+            print(f"Name: {element.name}")
+            print(f"Signature: {element.signature}")
+            print(f"Lines: {element.line_start}-{element.line_end}")
+            print(f"Decorators: {element.decorators}")
+            print(f"Public: {element.is_public}")
             if element.class_name:
-                print(f"类名: {element.class_name}")
+                print(f"Class name: {element.class_name}")
             if element.docstring:
-                print(f"文档: {element.docstring[:50]}...")
+                print(f"Doc: {element.docstring[:50]}...")
             if element.parameters:
-                print(f"参数: {element.parameters}")
-            print("代码:")
+                print(f"Parameters: {element.parameters}")
+            print("Code:")
             print(element.code[:150] + "..." if len(element.code) > 150 else element.code)
             print("-" * 50)
     
-    # 只显示公有元素
-    print("\n\n=== 只显示公有可调用元素 ===")
+    # Show only public elements
+    print("\n\n=== Show only public callable elements ===")
     public_elements = extractor.filter_public_only(callable_elements)
     for element in public_elements:
         print(f"{element.callable_type.value}: {element.name}")
     
-    # 只显示函数和方法
-    print("\n\n=== 只显示函数和方法 ===")
+    # Show only functions and methods
+    print("\n\n=== Show only functions and methods ===")
     function_types = [
         CallableType.FUNCTION, CallableType.ASYNC_FUNCTION, 
         CallableType.METHOD, CallableType.ASYNC_METHOD,

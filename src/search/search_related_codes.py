@@ -15,17 +15,17 @@ from src.search.prompts import (
 )
 
 class RelatedCodeSearcher:
-    """搜索相关代码的主类"""
+    """Main class for searching related code"""
     
     def __init__(self, project_root: str, language: str = "auto", llm_client=None, docker_runner: DockerCommandRunner = None):
         """
-        初始化搜索器
+        Initialize the searcher
         
         Args:
-            project_root: 项目根目录路径（在Docker容器中的路径）
-            language: 编程语言 ("java", "python", "c#", "typescript", "auto")
-            llm_client: LLM客户端，需要实现query方法
-            docker_runner: Docker命令运行器，用于在容器中执行命令
+            project_root: Project root directory path (path in Docker container)
+            language: Programming language ("java", "python", "c#", "typescript", "auto")
+            llm_client: LLM client, needs to implement query method
+            docker_runner: Docker command runner, used to execute commands in container
         """
         self.project_root = Path(project_root).resolve()
         self.language = language.lower()
@@ -35,7 +35,7 @@ class RelatedCodeSearcher:
         if not self.docker_runner:
             raise ValueError("Docker runner is required for this implementation")
         
-        # 语言对应的文件扩展名映射
+        # Language to file extension mapping
         self.language_extensions = {
             "java": [".java"],
             "python": [".py", ".pyx", ".pyi"],
@@ -54,7 +54,7 @@ class RelatedCodeSearcher:
             "swift": [".swift"]
         }
         
-        # 语言对应的特殊文件名映射
+        # Language to special file name mapping
         self.language_special_files = {
             "python": ["__init__.py"],
             "java": ["package-info.java"],
@@ -65,12 +65,12 @@ class RelatedCodeSearcher:
         }
         
     def get_project_tree_structure(self) -> str:
-        """获取项目树结构，根据语言过滤相关文件"""
+        """Get project tree structure, filter related files by language"""
         try:
-            # 获取当前语言的文件扩展名
+            # Get file extensions for current language
             extensions = self._get_current_extensions()
             
-            # Docker环境中的处理
+            # Handle Docker environment
             return self._get_docker_tree_structure(extensions)
                 
         except Exception as e:
@@ -78,18 +78,18 @@ class RelatedCodeSearcher:
             return self._generate_tree_structure_fallback()
     
     def _get_docker_tree_structure(self, extensions: List[str]) -> str:
-        """在Docker环境中获取项目树结构"""
+        """Get project tree structure in Docker environment"""
         try:
-            # 首先尝试安装tree命令（如果不存在）
+            # First try to install tree command (if not exists)
             install_result = self.docker_runner.run_command("which tree || (apt-get update && apt-get install -y tree)")
             
             if extensions:
-                # 构建tree命令的pattern
+                # Build tree command pattern
                 patterns = [f"*{ext}" for ext in extensions]
                 pattern_str = " -o ".join([f"-P '{p}'" for p in patterns])
                 command = f"tree {pattern_str} --prune"
             else:
-                # 如果语言未指定或为auto，显示所有文件
+                # If language not specified or auto, show all files
                 command = "tree"
             
             result = self.docker_runner.run_command(command)
@@ -97,7 +97,7 @@ class RelatedCodeSearcher:
             if result.get("stdout") and result.get("returncode") == 0:
                 return result["stdout"]
             else:
-                # 如果tree命令失败，使用find命令作为备选
+                # If tree command fails, use find command as fallback
                 return self._get_docker_find_structure(extensions)
                 
         except Exception as e:
@@ -105,21 +105,21 @@ class RelatedCodeSearcher:
             return self._get_docker_find_structure(extensions)
     
     def _get_docker_find_structure(self, extensions: List[str]) -> str:
-        """使用find命令在Docker中获取文件结构"""
+        """Use find command to get file structure in Docker"""
         try:
             if extensions:
-                # 构建find命令的文件类型过滤
+                # Build find command file type filter
                 name_patterns = [f"-name '*{ext}'" for ext in extensions]
                 find_pattern = " -o ".join(name_patterns)
                 command = f"find . -type f \\( {find_pattern} \\) | sort"
             else:
-                # 显示所有文件，但排除常见的隐藏目录
+                # Show all files, but exclude common hidden directories
                 command = "find . -type f -not -path './.git/*' -not -path './.*' | sort"
             
             result = self.docker_runner.run_command(command)
             
             if result.get("stdout") and result.get("returncode") == 0:
-                # 将find的输出转换为类似tree的格式
+                # Convert find output to tree-like format
                 return self._format_find_output_as_tree(result["stdout"])
             else:
                 return self._generate_tree_structure_fallback()
@@ -130,20 +130,20 @@ class RelatedCodeSearcher:
     
     
     def _format_find_output_as_tree(self, find_output: str) -> str:
-        """将find命令的输出格式化为类似tree的结构"""
+        """Format find command output to tree-like structure"""
         lines = [line.strip() for line in find_output.split('\n') if line.strip()]
         if not lines:
             return ""
         
-        # 构建目录结构
+        # Build directory structure
         tree_lines = ["Project Structure:"]
         processed_paths = set()
         
-        # 按路径深度和字母顺序排序
+        # Sort by path depth and alphabetical order
         lines.sort(key=lambda x: (x.count('/'), x))
         
         for line in lines:
-            # 移除前导的./
+            # Remove leading ./
             path = line.lstrip('./')
             if not path or path in processed_paths:
                 continue
@@ -151,7 +151,7 @@ class RelatedCodeSearcher:
             processed_paths.add(path)
             parts = path.split('/')
             
-            # 构建树状结构显示
+            # Build tree structure display
             depth = len(parts) - 1
             indent = "  " * depth
             filename = parts[-1]
@@ -164,34 +164,34 @@ class RelatedCodeSearcher:
         return '\n'.join(tree_lines)
     
     def _get_current_extensions(self) -> List[str]:
-        """获取当前语言的文件扩展名"""
+        """Get file extensions for current language"""
         if self.language == "auto":
             return []
         return self.language_extensions.get(self.language, [])
     
     def _generate_tree_structure_fallback(self) -> str:
-        """备用方法：手动生成文件的树结构"""
+        """Fallback method: manually generate file tree structure"""
         extensions = self._get_current_extensions()
         
-        # Docker环境：使用find命令获取文件列表
+        # Docker environment: use find command to get file list
         return self._get_docker_find_structure(extensions)
     
     def read_file_content(self, file_path: str) -> str:
-        """读取文件内容"""
+        """Read file content"""
         try:
-            # 只支持Docker环境中读取文件
+            # Only support reading files in Docker environment
             return self._read_file_from_docker(file_path)
         except Exception as e:
             print(f"Warning: Could not read file {file_path}: {e}")
             return ""
     
     def _read_file_from_docker(self, file_path: str) -> str:
-        """从Docker容器中读取文件内容"""
+        """Read file content from Docker container"""
         try:
-            # 构建容器中的文件路径，确保路径正确
+            # Build file path in container, ensure path is correct
             container_path = file_path.lstrip('/')
             
-            # 使用cat命令读取文件
+            # Use cat command to read file
             result = self.docker_runner.run_command(f"cat '{container_path}'")
             
             if result.get("returncode") == 0:
@@ -205,11 +205,11 @@ class RelatedCodeSearcher:
             return ""
     
     def get_language_from_path(self, file_path: str) -> str:
-        """根据文件路径确定语言"""
+        """Determine language based on file path"""
         if self.language != "auto":
             return self.language
         
-        # 自动检测语言
+        # Auto detect language
         file_ext = Path(file_path).suffix.lower()
         for lang, extensions in self.language_extensions.items():
             if file_ext in extensions:
@@ -218,7 +218,7 @@ class RelatedCodeSearcher:
         return "text"
     
     def find_special_files_info(self) -> str:
-        """查找特殊文件及其导入信息（如Python的__init__.py、Java的package-info.java等）"""
+        """Find special files and their import info (like Python's __init__.py, Java's package-info.java, etc.)"""
         if self.language == "auto":
             return ""
         
@@ -229,13 +229,13 @@ class RelatedCodeSearcher:
         special_info = []
         
         for special_file in special_files:
-            # 在Docker环境中查找所有特殊文件
+            # Find all special files in Docker environment
             found_files = self._find_files_in_docker(special_file)
             
             for relative_path in found_files:
                 content = self.read_file_content(relative_path)
                 
-                # 提取import语句（根据语言调整）
+                # Extract import statements (adjust based on language)
                 import_lines = self._extract_import_statements(content, self.language)
                 
                 if import_lines:
@@ -246,17 +246,17 @@ class RelatedCodeSearcher:
         return "\n".join(special_info)
     
     def _find_files_in_docker(self, filename: str) -> List[str]:
-        """在Docker容器中查找特定文件"""
+        """Find specific files in Docker container"""
         try:
             result = self.docker_runner.run_command(f"find . -name '{filename}' -type f")
             
             if result.get("returncode") == 0 and result.get("stdout"):
-                # 清理路径，移除前导的./
+                # Clean paths, remove leading ./
                 files = []
                 for line in result["stdout"].split('\n'):
                     line = line.strip()
                     if line and line.startswith('./'):
-                        clean_path = line[2:]  # 移除 './'
+                        clean_path = line[2:]  # Remove './'
                         if clean_path:
                             files.append(clean_path)
                 return files
@@ -268,7 +268,7 @@ class RelatedCodeSearcher:
             return []
     
     def _extract_import_statements(self, content: str, language: str) -> List[str]:
-        """根据语言提取import语句"""
+        """Extract import statements based on language"""
         import_lines = []
         
         for line in content.split('\n'):
@@ -296,7 +296,7 @@ class RelatedCodeSearcher:
         return import_lines
     
     def call_llm(self, system_prompt: str, user_prompt: str) -> str:
-        """调用LLM"""
+        """Call LLM"""
         if not self.llm_client:
             raise ValueError("LLM client not provided")
         
@@ -305,7 +305,7 @@ class RelatedCodeSearcher:
             {"role": "user", "content": user_prompt}
         ]
         
-        # 使用CopilotProxyLLMClient的query方法
+        # Use CopilotProxyLLMClient's query method
         response = self.llm_client.query(messages)
         return response
     
@@ -337,39 +337,8 @@ class RelatedCodeSearcher:
             print("Response is not valid JSON when parse_dependent_codes")
             return ""
     
-    # def _clean_json_response(self, response: str) -> str:
-    #     """清理LLM响应，提取有效的JSON"""
-    #     # 移除markdown代码块标记
-    #     if "```json" in response:
-    #         json_start = response.find("```json") + 7
-    #         json_end = response.find("```", json_start)
-    #         if json_end != -1:
-    #             response = response[json_start:json_end]
-    #     elif "```" in response:
-    #         # 处理没有json标记的代码块
-    #         first_brace = response.find("{")
-    #         if first_brace != -1:
-    #             # 从第一个大括号开始查找
-    #             brace_count = 0
-    #             end_pos = first_brace
-    #             for i, char in enumerate(response[first_brace:], first_brace):
-    #                 if char == "{":
-    #                     brace_count += 1
-    #                 elif char == "}":
-    #                     brace_count -= 1
-    #                     if brace_count == 0:
-    #                         end_pos = i + 1
-    #                         break
-    #             response = response[first_brace:end_pos]
-        
-    #     # 处理包含三重引号的字符串
-    #     response = response.replace('"""', '"')
-        
-    #     # 移除前后空白
-    #     return response.strip()
-    
     def _file_exists_in_docker(self, file_path: str) -> bool:
-        """检查文件在Docker容器中是否存在"""
+        """Check if file exists in Docker container"""
         try:
             container_path = file_path.lstrip('/')
             result = self.docker_runner.run_command(f"test -f '{container_path}' && echo 'EXISTS' || echo 'NOT_FOUND'")
@@ -378,7 +347,7 @@ class RelatedCodeSearcher:
             return False
     
     def find_dependent_files(self, target_file_path: str, target_file_content: str) -> List[str]:
-        """查找依赖文件"""
+        """Find dependent files"""
         try:
             project_tree = self.get_project_tree_structure()
             language = self.get_language_from_path(target_file_path)
@@ -390,7 +359,7 @@ class RelatedCodeSearcher:
                 LANGUAGE=language
             )
             
-            # 添加特殊文件信息（如Python的__init__.py等）
+            # Add special file info (like Python's __init__.py, etc.)
             special_info = self.find_special_files_info()
             if special_info:
                 user_prompt += "\n\n" + SEARCH_DEPENDENT_FILES_EXTRA_USER_PROMPT.format(
@@ -405,7 +374,7 @@ class RelatedCodeSearcher:
             return []
     
     def extract_dependent_codes(self, code_query: str, target_file_path: str, target_file_content: str) -> str:
-        """从目标文件中提取相关代码"""
+        """Extract related code from target file"""
         try:
             language = self.get_language_from_path(target_file_path)
             
@@ -424,26 +393,26 @@ class RelatedCodeSearcher:
     
     def search_related_codes(self, target_file_path: str, max_depth: int = 3) -> str:  
         """  
-        搜索相关代码的主函数  
+        Main function to search related codes  
     
         Args:  
-            target_file_path: 目标文件路径（相对于项目根目录）  
-            max_depth: 最大搜索深度，防止无限递归  
+            target_file_path: Target file path (relative to project root)  
+            max_depth: Maximum search depth, prevent infinite recursion  
     
         Returns:  
-            str: 拼接后的所有相关代码  
+            str: Concatenated all related codes  
         """  
         if not self.llm_client:  
             raise ValueError("LLM client is required for searching related codes")  
     
-        # 记录已处理的文件，避免重复处理  
+        # Record processed files, avoid duplicate processing  
         processed_files: Set[str] = set()  
-        # 存储所有找到的相关代码  
+        # Store all found related codes  
         all_related_codes: Dict[str, str] = {}  
-        # 存储文件间的依赖关系  
+        # Store dependencies between files  
         dependency_graph: Dict[str, List[str]] = {}  
     
-        # 待处理的文件队列，BFS风格，每个元素为 (file_path, 当前深度)  
+        # Queue of files to process, BFS style, each element is (file_path, current_depth)  
         files_to_process = [(target_file_path, 0)]  
     
         while files_to_process:  
@@ -454,14 +423,14 @@ class RelatedCodeSearcher:
                 continue  
             processed_files.add(file_path)  
     
-            # 读取文件内容  
+            # Read file content  
             file_content = self.read_file_content(file_path)  
             if not file_content:  
                 continue  
     
             print(f"Processing file: {file_path} (depth: {cur_depth})")  
     
-            # 如果是主文件，直接用全部内容  
+            # If it's the main file, use full content directly  
             if file_path == target_file_path:  
                 all_related_codes[file_path] = file_content  
                 main_file_code = file_content  
@@ -476,15 +445,15 @@ class RelatedCodeSearcher:
                     print(f"No relevant code found in {file_path}")  
                     continue  
     
-            # 查找当前文件的依赖文件  
+            # Find dependent files of current file  
             dependent_files = self.find_dependent_files(file_path, file_content)  
             if dependent_files:  
                 dependency_graph[file_path] = dependent_files  
                 print(f"Found dependencies for {file_path}: {dependent_files}")  
-                # 新依赖文件入队，防止重复  
+                # Enqueue new dependency files, prevent duplicates  
                 for dep_file in dependent_files:  
                     if dep_file not in processed_files:  
-                        # 检查文件是否存在  
+                        # Check if file exists  
                         if self._file_exists_in_docker(dep_file):  
                             files_to_process.append((dep_file, cur_depth + 1))  
                         else:  
@@ -493,7 +462,7 @@ class RelatedCodeSearcher:
         if not all_related_codes:  
             return ""  
     
-        # 根据依赖关系拼接代码，加深度限制  
+        # Assemble codes based on dependency relationships, with depth limit  
         return self._assemble_codes_by_dependency(  
             all_related_codes, dependency_graph, target_file_path, max_depth  
         )  
@@ -503,7 +472,7 @@ class RelatedCodeSearcher:
                                     dependency_graph: Dict[str, List[str]],  
                                     start_file: str, max_depth: int = 3) -> str:  
         """  
-        根据依赖关系拼接代码，防止递归爆栈和循环依赖  
+        Assemble codes based on dependency relationships, prevent stack overflow and circular dependencies  
         """  
         assembled_code = []  
         visited = set()  
@@ -516,11 +485,11 @@ class RelatedCodeSearcher:
             if file_path not in all_codes:  
                 return  
             visited.add(file_path)  
-            # 先添加依赖文件的代码  
+            # First add dependent files' code  
             if file_path in dependency_graph:  
                 for dep_file in dependency_graph[file_path]:  
                     add_file_code(dep_file, cur_depth + 1)  
-            # 然后加当前文件的代码  
+            # Then add current file's code  
             code = all_codes[file_path]  
             if code.strip():  
                 assembled_code.append(f"# File: {file_path}")  
@@ -535,18 +504,18 @@ def create_docker_related_code_searcher(project_root: str, language: str = "auto
                                        llm_client=None, container_name: str = None, 
                                        docker_image: str = None, testbed_path: str = "/testbed") -> RelatedCodeSearcher:
     """
-    创建Docker环境的相关代码搜索器
+    Create related code searcher for Docker environment
     
     Args:
-        project_root: 项目根目录路径
-        language: 编程语言
-        llm_client: LLM客户端
-        container_name: Docker容器名称
-        docker_image: Docker镜像名称
-        testbed_path: 容器中的测试床路径
+        project_root: Project root directory path
+        language: Programming language
+        llm_client: LLM client
+        container_name: Docker container name
+        docker_image: Docker image name
+        testbed_path: Testbed path in container
         
     Returns:
-        RelatedCodeSearcher: 配置了Docker运行器的搜索器实例
+        RelatedCodeSearcher: Searcher instance configured with Docker runner
     """
     docker_runner = DockerCommandRunner(
         container_name=container_name,
@@ -565,7 +534,6 @@ def create_docker_related_code_searcher(project_root: str, language: str = "auto
 # if __name__ == "__main__":
     # import argparse
     
-    # # 使用示例
     # parser = argparse.ArgumentParser(description="Search related codes for a target file in Docker environment")
     # parser.add_argument("--project-root", default="/testbed", 
     #                    help="Project root directory in Docker container")
@@ -577,7 +545,6 @@ def create_docker_related_code_searcher(project_root: str, language: str = "auto
     # parser.add_argument("--max-depth", type=int, default=3,
     #                    help="Maximum search depth")
     
-    # # Docker相关参数（必需）
     # parser.add_argument("--container", default="coverage_analyzer", 
     #                    help="Docker container name")
     # parser.add_argument("--image", 
@@ -589,14 +556,6 @@ def create_docker_related_code_searcher(project_root: str, language: str = "auto
     # args = parser.parse_args()
     
     # llm_client = CopilotProxyLLMClient()
-    
-    # print(f"\n=== 搜索 {args.language} 相关代码（Docker环境）===")
-    # print(f"项目根目录: {args.project_root}")
-    # print(f"目标文件: {args.target_file}")
-    # print(f"容器名称: {args.container}")
-    # print(f"镜像名称: {args.image}")
-    
-    # # 创建Docker环境的搜索器
     # searcher = create_docker_related_code_searcher(
     #     project_root=args.project_root,
     #     language=args.language,
@@ -609,8 +568,7 @@ def create_docker_related_code_searcher(project_root: str, language: str = "auto
     # result = searcher.search_related_codes(args.target_file, max_depth=args.max_depth)
     
     # if result:
-    #     print("\n找到的相关代码：")
     #     print("=" * 50)
     #     print(result)
     # else:
-    #     print("没有找到相关代码")
+    #     print("No related codes found.")

@@ -17,9 +17,9 @@ class CopilotProxyLLMClient:
         proxy_url: str = "https://ces-dev1.azurewebsites.net/api/proxy/chat/completions",
         scope: str = "api://17b0ad65-ed36-4194-bb27-059c567bc41f/.default",
         model: str = "gpt-4o",
-        timeout: int = 300,  # 增加默认超时时间到5分钟
-        max_retries: int = 3,  # 最大重试次数
-        backoff_factor: float = 1.0  # 重试间隔因子
+        timeout: int = 300,
+        max_retries: int = 3,
+        backoff_factor: float = 1.0
     ):
         # Initialize credential and endpoint settings
         self.integration_id = integration_id
@@ -35,7 +35,7 @@ class CopilotProxyLLMClient:
         self.session = requests.Session()
         retry_strategy = Retry(
             total=max_retries,
-            status_forcelist=[429, 500, 502, 503, 504],  # HTTP状态码重试
+            status_forcelist=[429, 500, 502, 503, 504],
             backoff_factor=backoff_factor,
             raise_on_status=False
         )
@@ -126,7 +126,6 @@ class CopilotProxyLLMClient:
                 data = response.json()
                 return data.get('choices', [{}])[0].get('message', {}).get('content', '')
             elif response.status_code in [429, 500, 502, 503, 504] and retry_count < self.max_retries:
-                # 对于可重试的错误状态码，进行重试
                 wait_time = self.backoff_factor * (2 ** retry_count)
                 print(f"Request failed with status {response.status_code}, retrying in {wait_time} seconds... (attempt {retry_count + 1}/{self.max_retries})")
                 time.sleep(wait_time)
@@ -155,7 +154,6 @@ class CopilotProxyLLMClient:
                 raise RuntimeError(f"Connection failed after {self.max_retries} retries. Original error: {str(e)}")
         
         except Exception as e:
-            # 对于其他异常，如果还有重试次数，也尝试重试
             if retry_count < self.max_retries:
                 wait_time = self.backoff_factor * (2 ** retry_count)
                 print(f"Unexpected error: {str(e)}, retrying in {wait_time} seconds... (attempt {retry_count + 1}/{self.max_retries})")
@@ -164,7 +162,7 @@ class CopilotProxyLLMClient:
             else:
                 raise RuntimeError(f"Request failed after {self.max_retries} retries. Original error: {str(e)}")
 
-# if __name__ == "__main__":
-#     client = CopilotProxyLLMClient(model="claude-3.5-sonnet")
-#     response = client.query([{"role": "user", "content": "1 * 220 =?"}])
-#     print(response)
+if __name__ == "__main__":
+    client = CopilotProxyLLMClient(model="claude-3.5-sonnet")
+    response = client.query([{"role": "user", "content": "1 * 220 =?"}])
+    print(response)

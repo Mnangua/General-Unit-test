@@ -1,4 +1,3 @@
-# Python测试生成系统提示词
 PYTHON_TEST_GENERATION_SYSTEM_PROMPT = """
 You are an expert Python test generator specializing in creating comprehensive unit tests for uncovered code segments.
 
@@ -48,7 +47,7 @@ Do NOT wrap test_code in triple quotes! JSON parsers may fail if code contains s
 No additional text or markdown formatting.
 """
 
-# Java测试生成系统提示词
+
 JAVA_TEST_GENERATION_SYSTEM_PROMPT = """
 You are an expert Java test generator specializing in creating comprehensive unit tests for uncovered code segments.
 
@@ -144,7 +143,6 @@ For Java projects:
 Generate complete, runnable test code that can be directly saved to the specified test file path.
 """
 
-# 代码质量和测试改进提示词
 TEST_IMPROVEMENT_SYSTEM_PROMPT = """
 You are an expert code reviewer and test quality analyst. Your task is to analyze generated test code and provide suggestions for improvement.
 

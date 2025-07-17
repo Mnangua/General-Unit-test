@@ -23,15 +23,13 @@ args = parser.parse_args()
 csv_file = "/home/mengnanqi/General-Unit-Test/exp_data/metadata_fix.csv"  
 tgt_file = "/home/mengnanqi/General-Unit-Test/results/python/fix_msbench_results.csv"  
 df = pd.read_csv(csv_file)  
-  
-# 初始化新列为 None
+
 if args.enable_generate:  
     df['coverage_before'] = None  
     df['coverage_after'] = None
 if args.enable_error_fixing:
     df['errors_fixed'] = None
     df['coverage_after_fix'] = None
-    # 为每轮修复添加覆盖率列
     for i in range(args.max_fix_iterations):
         df[f'coverage_iteration_{i+1}'] = None
         df[f'errors_fixed_iteration_{i+1}'] = None  
@@ -60,11 +58,9 @@ for index, row in tqdm(df.iterrows()):
         coverage_after = generator.coverage_analyzer.collect_coverage()  
         df.at[index, 'coverage_after'] = coverage_after.coverage_percentage if coverage_after is not None else None  
 
-    # 错误修复阶段
     if args.enable_error_fixing:
         print(f"Starting error fixing for {container_name}...")
-        
-        # 创建错误修复器
+
         error_fixer = create_error_fixer(
             container_name=container_name,
             docker_image=image,
@@ -74,15 +70,12 @@ for index, row in tqdm(df.iterrows()):
             max_fix_iterations=args.max_fix_iterations
         )
         
-        # 执行错误修复
         fix_results, coverage_after_fix, iteration_coverage_reports = error_fixer.fix_errors_and_collect_coverage()
         
-        # 记录总体修复结果
         successful_fixes = [fix for fix in fix_results if fix.success]
         df.at[index, 'errors_fixed'] = len(successful_fixes)
         df.at[index, 'coverage_after_fix'] = coverage_after_fix.coverage_percentage if coverage_after_fix is not None else None
         
-        # 记录每轮迭代的结果
         for iteration_report in iteration_coverage_reports:
             iteration_num = iteration_report['iteration']
             coverage_report = iteration_report['coverage_report']
@@ -94,12 +87,10 @@ for index, row in tqdm(df.iterrows()):
         print(f"Fixed {len(successful_fixes)}/{len(fix_results)} errors for {container_name}")
         print(f"Coverage progression: {[report['coverage_report'].coverage_percentage if report['coverage_report'] else 0 for report in iteration_coverage_reports]}")
     else:
-        # 如果没有启用错误修复，将迭代列设为0
         for i in range(args.max_fix_iterations):
             df.at[index, f'coverage_iteration_{i+1}'] = None
             df.at[index, f'errors_fixed_iteration_{i+1}'] = 0
   
     print(f"Processed {container_name} with image {image} ...")  
-  
-# 写入 CSV  
+
 df.to_csv(tgt_file, index=False)  

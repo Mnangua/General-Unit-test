@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-V2版本的错误修复器，支持两种修复类型：代码修复和命令修复。
-"""
-
 import os
 import json
 import re
@@ -44,8 +40,6 @@ class FixResultV2:
 
 
 class CoverageBasedErrorFixerV2:
-    """基于覆盖率的错误修复器 V2版本，支持代码修复和命令修复"""
-    
     def __init__(self, container_name: str, images: str, language: str, temp_dir: str, 
                  llm_client=None, max_fix_iterations: int = 3):
         self.language = language.lower()
@@ -55,14 +49,11 @@ class CoverageBasedErrorFixerV2:
         self.temp_dir = temp_dir
         self.max_fix_iterations = max_fix_iterations
         
-        # 初始化覆盖率分析器
         self.coverage_analyzer = create_docker_coverage_analyzer(
             container_name=self.container,
             docker_image=self.image,
             output_dir=self.temp_dir,
         )
-        
-        # 初始化Docker命令运行器
         self.docker_runner = DockerCommandRunner(
             container_name=self.container,
             docker_image=self.image,
@@ -70,7 +61,6 @@ class CoverageBasedErrorFixerV2:
         )
     
     def fix_errors_and_collect_coverage(self) -> tuple[List[FixResultV2], Any, List[Dict]]:
-        """修复错误并收集覆盖率信息"""
         print(f"Starting error fixing (V2) for {self.language} project...")
         
         fix_results = []
@@ -78,16 +68,12 @@ class CoverageBasedErrorFixerV2:
         
         for iteration in range(self.max_fix_iterations):
             print(f"\n=== Fix Iteration {iteration + 1}/{self.max_fix_iterations} ===")
-            
-            # 1. 运行测试并获取错误输出
             print("Step 1: Running tests to collect errors...")
             error_output = self._run_coverage_with_errors()
             
             if not error_output.strip():
                 print("No errors found in this iteration.")
                 break
-            
-            # 2. 分析错误
             print("Step 2: Analyzing errors...")
             errors = self._analyze_errors(error_output)
             
@@ -96,21 +82,16 @@ class CoverageBasedErrorFixerV2:
                 break
             
             print(f"Found {len(errors)} errors to fix")
-            
-            # 3. 修复所有错误
             print("Step 3: Fixing errors...")
             iteration_fixes = self._fix_all_errors(errors)
             fix_results.extend(iteration_fixes)
-            
-            # 检查是否有成功的修复
+
             successful_fixes = [fix for fix in iteration_fixes if fix.success]
             if not successful_fixes:
                 print("No successful fixes in this iteration.")
                 break
             
             print(f"Successfully fixed {len(successful_fixes)} errors in this iteration.")
-            
-            # 4. 收集这一轮修复后的覆盖率
             print(f"Step 4: Collecting coverage after iteration {iteration + 1}...")
             iteration_coverage = self.coverage_analyzer.collect_coverage()
             iteration_coverage_reports.append({
@@ -118,32 +99,25 @@ class CoverageBasedErrorFixerV2:
                 'coverage_report': iteration_coverage,
                 'errors_fixed': len(successful_fixes)
             })
-        
-        # 5. 最终收集覆盖率信息（如果没有在上面的循环中收集到）
+
         if not iteration_coverage_reports:
             print("\nStep 5: Collecting final coverage...")
             final_coverage = self.coverage_analyzer.collect_coverage()
         else:
-            # 使用最后一轮的覆盖率作为最终覆盖率
             final_coverage = iteration_coverage_reports[-1]['coverage_report']
         
         return fix_results, final_coverage, iteration_coverage_reports
     
     def _run_coverage_with_errors(self) -> str:
-        """运行覆盖率测试并捕获错误输出"""
         try:
-            # 构建coverage命令
             coverage_cmd = (
                 "coverage run --source='.' "
                 "--omit='**/tests/**,**/test_*.py,**/*_test.py,**/__init__.py,"
                 "**/.venv/**,**/.tox/**,**/.pytest_cache/**' "
                 "-m pytest --continue-on-collection-errors"
             )
-            
-            # 在Docker容器的testbed目录下执行
+
             result = self.docker_runner.run_command(coverage_cmd)
-            
-            # 返回stderr，因为错误信息通常在stderr中
             error_output = result.get("stderr", "")
             if not error_output:
                 error_output = result.get("stdout", "")
@@ -155,29 +129,25 @@ class CoverageBasedErrorFixerV2:
             return ""
     
     def _analyze_errors(self, error_output: str) -> List[ErrorInfo]:
-        """使用LLM分析错误输出"""
         if not self.llm_client:
             print("No LLM client available for error analysis")
             return []
         
         try:
-            # 准备prompt
             user_prompt = ERROR_ANALYSIS_USER_PROMPT.format(ERROR_LOG=error_output)
-            
-            # 构建消息列表
             messages = [
                 {"role": "system", "content": ERROR_ANALYSIS_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt}
             ]
             
-            # 调用LLM
+            # Call LLM
             response = self.llm_client.query(messages)
             
-            # 解析JSON响应
+            # Parse JSON response
             response_json = json.loads(response)
             errors = response_json.get("errors", [])
             
-            # 转换为ErrorInfo对象
+            # Convert to ErrorInfo objects
             error_infos = []
             for error in errors:
                 error_info = ErrorInfo(
@@ -194,7 +164,7 @@ class CoverageBasedErrorFixerV2:
             return []
     
     def _fix_all_errors(self, errors: List[ErrorInfo]) -> List[FixResultV2]:
-        """修复所有错误"""
+        """Fix all errors"""
         fix_results = []
         
         for i, error in enumerate(errors, 1):
@@ -226,9 +196,9 @@ class CoverageBasedErrorFixerV2:
         return fix_results
     
     def _fix_single_error(self, error: ErrorInfo) -> FixResultV2:
-        """修复单个错误"""
+        """Fix a single error"""
         try:
-            # 1. 读取文件内容
+            # 1. Read file content
             file_content = self._read_file_from_container(error.file_path)
             if not file_content:
                 return FixResultV2(
@@ -239,25 +209,25 @@ class CoverageBasedErrorFixerV2:
                     error_message="Failed to read file content"
                 )
             
-            # 2. 添加行号并提取错误块
+            # 2. Add line numbers and extract error block
             lines = file_content.split('\n')
             numbered_full_code = self._add_line_numbers(file_content)
             
-            # 提取错误块（包含一些上下文）
-            start_line = max(1, error.line_range[0] - 2)  # 添加2行上下文
-            end_line = min(len(lines), error.line_range[1] + 2)  # 添加2行下文
+            # Extract error block (with some context)
+            start_line = max(1, error.line_range[0] - 2)  # Add 2 lines of context above
+            end_line = min(len(lines), error.line_range[1] + 2)  # Add 2 lines of context below
             
             error_block_lines = lines[start_line-1:end_line]
             numbered_error_block = self._add_line_numbers('\n'.join(error_block_lines), start_line)
             
-            # 3. 使用LLM获取修复建议
+            # 3. Use LLM to get fix suggestions
             fix_response = self._get_fix_from_llm(
                 numbered_full_code, numbered_error_block, error.message
             )
             
-            # 4. 根据修复类型执行相应操作
+            # 4. Execute corresponding operations based on fix type
             if fix_response["fix_type"] == "code":
-                # 代码修复
+                # Code fix
                 fixed_code = fix_response.get("fixed_code", "").strip()
                 if not fixed_code:
                     return FixResultV2(
@@ -268,7 +238,7 @@ class CoverageBasedErrorFixerV2:
                         error_message="LLM returned empty fix"
                     )
                 
-                # 应用代码修复
+                # Apply code fix
                 success = self._apply_code_fix_to_file(error.file_path, error_block_lines, fixed_code, start_line-1, end_line)
                 
                 return FixResultV2(
@@ -282,7 +252,7 @@ class CoverageBasedErrorFixerV2:
                 )
             
             elif fix_response["fix_type"] == "command":
-                # 命令修复
+                # Command fix
                 commands = fix_response.get("commands", [])
                 description = fix_response.get("description", "")
                 
@@ -295,7 +265,7 @@ class CoverageBasedErrorFixerV2:
                         error_message="No commands provided"
                     )
                 
-                # 执行命令
+                # Execute commands
                 success = self._execute_commands(commands)
                 
                 return FixResultV2(
@@ -309,7 +279,7 @@ class CoverageBasedErrorFixerV2:
                 )
             
             else:
-                # 无法修复
+                # Cannot be fixed
                 return FixResultV2(
                     file_path=error.file_path,
                     original_code='\n'.join(error_block_lines),
@@ -329,9 +299,9 @@ class CoverageBasedErrorFixerV2:
             )
     
     def _read_file_from_container(self, file_path: str) -> str:
-        """从Docker容器中读取文件内容"""
+        """Read file content from Docker container"""
         try:
-            # 确保文件路径是相对于/testbed的
+            # Ensure file path is relative to /testbed
             if file_path.startswith('/'):
                 container_path = file_path
             else:
@@ -351,7 +321,7 @@ class CoverageBasedErrorFixerV2:
             return ""
     
     def _add_line_numbers(self, content: str, start_line: int = 1) -> str:
-        """为代码添加行号"""
+        """Add line numbers to code"""
         lines = content.split('\n')
         numbered_lines = []
         
@@ -362,7 +332,7 @@ class CoverageBasedErrorFixerV2:
         return '\n'.join(numbered_lines)
     
     def _get_fix_from_llm(self, full_code: str, error_block: str, error_message: str) -> Dict:
-        """使用LLM获取修复建议"""
+        """Get fix suggestions using LLM"""
         if not self.llm_client:
             return {"fix_type": "unfixable", "reason": "No LLM client available"}
         
@@ -374,7 +344,7 @@ class CoverageBasedErrorFixerV2:
                 ERROR_MESSAGE=error_message
             )
             
-            # 构建消息列表
+            # Build message list
             messages = [
                 {"role": "system", "content": UNIT_TESTS_FIX_V2_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt}
@@ -382,7 +352,7 @@ class CoverageBasedErrorFixerV2:
             
             response = self.llm_client.query(messages)
             
-            # 解析JSON响应
+            # Parse JSON response
             return json.loads(response)
             
         except Exception as e:
@@ -391,23 +361,23 @@ class CoverageBasedErrorFixerV2:
     
     def _apply_code_fix_to_file(self, file_path: str, original_lines: List[str], fixed_code: str, 
                                start_index: int, end_index: int) -> bool:
-        """将代码修复应用到文件"""
+        """Apply code fix to file"""
         try:
-            # 读取当前完整文件内容
+            # Read current complete file content
             current_content = self._read_file_from_container(file_path)
             if not current_content:
                 return False
             
             current_lines = current_content.split('\n')
             
-            # 将修复后的代码分割成行
+            # Split fixed code into lines
             fixed_lines = fixed_code.split('\n')
             
-            # 替换指定范围的行
+            # Replace specified range of lines
             new_lines = current_lines[:start_index] + fixed_lines + current_lines[end_index:]
             new_content = '\n'.join(new_lines)
             
-            # 写回文件
+            # Write back to file
             return self._write_file_to_container(file_path, new_content)
             
         except Exception as e:
@@ -415,7 +385,7 @@ class CoverageBasedErrorFixerV2:
             return False
     
     def _execute_commands(self, commands: List[str]) -> bool:
-        """执行命令列表"""
+        """Execute command list"""
         try:
             for cmd in commands:
                 print(f"    Executing: {cmd}")
@@ -435,19 +405,19 @@ class CoverageBasedErrorFixerV2:
             return False
     
     def _write_file_to_container(self, file_path: str, content: str) -> bool:
-        """将内容写入Docker容器中的文件"""
+        """Write content to file in Docker container"""
         try:
-            # 确保文件路径是相对于/testbed的
+            # Ensure file path is relative to /testbed
             if file_path.startswith('/'):
                 container_path = file_path
             else:
                 container_path = f"/testbed/{file_path}"
             
-            # 使用 base64 编码来避免转义问题
+            # Use base64 encoding to avoid escape issues
             import base64
             encoded_content = base64.b64encode(content.encode('utf-8')).decode('ascii')
             
-            # 在容器中解码并写入文件
+            # Decode and write file in container
             cmd = f'echo "{encoded_content}" | base64 -d > {container_path}'
             result = self.docker_runner.run_command(cmd)
             
@@ -464,7 +434,7 @@ def create_error_fixer_v2(container_name: str = None,
                          temp_dir: str = "./docker_output/error_fix_exp_v2",
                          llm_client=None,
                          max_fix_iterations: int = 3) -> CoverageBasedErrorFixerV2:
-    """创建V2版本错误修复器的工厂函数"""
+    """Factory function to create V2 version error fixer"""
     return CoverageBasedErrorFixerV2(
         container_name=container_name,
         images=docker_image,
@@ -491,10 +461,10 @@ def create_error_fixer_v2(container_name: str = None,
     
     # args = parser.parse_args()
     
-    # # 初始化LLM客户端
+    # # Initialize LLM client
     # llm_client = CopilotProxyLLMClient(model=args.model)
     
-    # # 创建错误修复器
+    # # Create error fixer
     # fixer = create_error_fixer_v2(
     #     container_name=args.container,
     #     docker_image=args.image,
@@ -504,16 +474,16 @@ def create_error_fixer_v2(container_name: str = None,
     #     max_fix_iterations=args.max_iterations
     # )
     
-    # # 执行错误修复
+    # # Execute error fixing
     # fix_results, coverage_report, iteration_coverage_reports = fixer.fix_errors_and_collect_coverage()
     
-    # # 输出结果
+    # # Output results
     # print(f"\n=== Fix Results Summary (V2) ===")
     # print(f"Total fixes attempted: {len(fix_results)}")
     # successful_fixes = [fix for fix in fix_results if fix.success]
     # print(f"Successful fixes: {len(successful_fixes)}")
     
-    # # 分类统计
+    # # Category statistics
     # code_fixes = [fix for fix in successful_fixes if fix.fix_type == "code"]
     # command_fixes = [fix for fix in successful_fixes if fix.fix_type == "command"]
     # unfixable = [fix for fix in fix_results if fix.fix_type == "unfixable"]
